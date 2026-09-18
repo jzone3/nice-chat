@@ -14,6 +14,14 @@ const QUESTIONS = {
       false: "Not kind: cold, dismissive, mocking, rude or hostile",
     },
   },
+  is_laughter: {
+    type: "noul",
+    instructions: "Is `draft_message` essentially just laughter or amusement — haha, lol, lmao, rofl, 😂, 'that's hilarious' — with no words aimed at a person?",
+    criteria: {
+      true: "Pure laughter/amusement in any casing or length: 'hahaha', 'LOL', 'lmaooo', 'haha nice', '😂😂'",
+      false: "Contains an actual statement about someone, or laughter attached to a put-down: 'lol you're pathetic', 'haha nobody cares'",
+    },
+  },
   is_insult: {
     type: "noul",
     instructions: "Does `draft_message` insult, belittle or demean a person or group?",
@@ -120,6 +128,7 @@ const THRESHOLDS = {
   cold_tone_min_prob: 0.75, // very confidently cold also blocks
   niceness_min: 2.5, // score below this blocks even if no flag fired
   kind_rescue: 0.85, // very kind + only soft flags -> let it through
+  laughter_rescue: 0.7, // plain laughter is good: only slurs/profanity/hate/threats can still block it
 };
 
 const REASON_LABELS = {
@@ -137,6 +146,9 @@ const REASON_LABELS = {
 };
 
 const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label", "is_insult"];
+// Laughter after a mishap reads as mocking to Jev (cold tone, low niceness, faint insult); the room
+// treats laughing as good, so only actual language violations survive the laughter rescue.
+const LAUGHTER_CANT_SAVE = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label"];
 
 // ------------------------------------------------------------------ decide
 function decide(answers) {
@@ -162,12 +174,15 @@ function decide(answers) {
   const niceness = (answers.niceness?.score ?? 2) + 1;
   const kind = answers.is_kind?.noul ?? 0;
 
+  const laughter = answers.is_laughter?.noul ?? 0;
+  const laughing = laughter >= THRESHOLDS.laughter_rescue && !reasons.some((r) => LAUGHTER_CANT_SAVE.includes(r.id));
+
   const hardHit = reasons.some((r) => HARD_FLAGS.includes(r.id) || r.id === "hostile");
-  if (!hardHit && kind >= THRESHOLDS.kind_rescue) {
-    // Very kind message with only soft flags: trust the kindness.
+  if (laughing || (!hardHit && kind >= THRESHOLDS.kind_rescue)) {
+    // Plain laughter, or a very kind message with only soft flags: let it through.
     reasons.length = 0;
   }
-  if (reasons.length === 0 && niceness < THRESHOLDS.niceness_min) {
+  if (reasons.length === 0 && !laughing && niceness < THRESHOLDS.niceness_min) {
     reasons.push({ id: "low_niceness", label: REASON_LABELS.low_niceness, p: 1 - niceness / 5 });
   }
 

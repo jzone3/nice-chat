@@ -129,3 +129,24 @@ test("judge: every upstream request, retries included, is charged to the budget"
   );
   assert.strictEqual(calls, 1);
 });
+
+test("plain laughter is allowed even when Jev reads it as cold/mocking in context", () => {
+  const d = decide(
+    answers({
+      is_kind: { noul: 0.1 },
+      is_laughter: { noul: 0.97 },
+      is_insult: { noul: 0.55 },
+      is_sarcastic_or_backhanded: { noul: 0.5 },
+      tone: { choice: "cold", probabilities: { warm: 0.05, neutral: 0.1, cold: 0.8, hostile: 0.05 } },
+      niceness: { score: 0.6, probabilities: { 0: 0.5, 1: 0.4, 2: 0.1, 3: 0, 4: 0 } },
+    })
+  );
+  assert.equal(d.allowed, true);
+  assert.deepEqual(d.hits, []);
+});
+
+test("laughter does not excuse profanity, slurs or hate", () => {
+  const d = decide(answers({ is_laughter: { noul: 0.9 }, is_profane_or_slur: { noul: 0.8 } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["is_profane_or_slur"]);
+});

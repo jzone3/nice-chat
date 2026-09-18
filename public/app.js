@@ -21,10 +21,12 @@
   const EMOJIS = "😀 😎 🥳 🤩 😇 🥰 🤠 🤓 🧐 🥸 😺 🐶 🦊 🐼 🐨 🦁 🐸 🐙 🦄 🐝 🦋 🐢 🐧 🦖 🌈 🌸 🌻 🍀 🌙 ⭐ 🔥 🍕 🍩 🧁 🍓 🥑 🎈 🎨 🎸 🚀 🛸 🧸 🪐 🍄 🐳 🦥 🦩 🫧".split(" ");
   const FLAG_LABELS = {
     is_kind: "kind",
+    is_laughter: "laughter",
     is_insult: "insult",
     is_sarcastic_or_backhanded: "sarcasm",
     is_passive_aggressive: "passive-aggr.",
     is_profane_or_slur: "profanity/slur",
+    is_disguised_slur: "disguised slur",
     is_derogatory_label: "put-down label",
     is_hateful: "hateful",
     is_harassment_or_threat: "harass/threat",

@@ -36,6 +36,7 @@ branch on. Each check is **one request with ten atomic questions** about the dra
 | id | type | question |
 | --- | --- | --- |
 | `is_kind` | Noul | Is it kind or friendly? |
+| `is_laughter` | Noul | Just laughter / amusement ("hahaha", "LOL", 😂)? Laughing is good here, so it overrides cold-tone / low-niceness reads (e.g. right after someone's mishap); only profanity, slurs, hate or threats still block. |
 | `is_insult` | Noul | Does it insult or demean someone? |
 | `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
 | `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |

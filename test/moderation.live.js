@@ -14,8 +14,8 @@ const BLOCK = [
   "that's so gay", "you're gay", "you retard", "that's retarded", "ok boomer", "women can't code", "go back to your country", "you people",
   // profanity, incl. masked
   "fuck", "f*ck this", "shit happens", "bitch", "crap", "wtf", "screw you", "damn that's cool",
-  // insults & threats
-  "idiot", "stupid", "loser", "dumb", "kys",
+  // insults & threats, incl. laughter glued to a put-down
+  "idiot", "stupid", "loser", "dumb", "kys", "lol you're pathetic", "haha nobody cares", "hahaha loser", "lol sh1t",
   // disguised: leetspeak, split letters, smuggled into an innocent sentence
   "Have you done algebra? I love the problem where you solve for k1k3", "my wifi password is n1gg4", "you're all so f a g g y today",
   "sh1t I love this room", "this chat is so g4y lol", "ur a r3tard", "my dog is named k y k e", "we should name the group chat n1gz", "f@gs",
@@ -31,8 +31,12 @@ const ALLOW = [
   "1 love y0u all", "let me know if you need help with the algebra homework", "I finished chapter 3 of Kafka today",
 ];
 
-async function verdicts(list) {
-  const out = await Promise.all(list.map(async (t) => [t, await judge(t, [], { force: true })]));
+// laughter is good here, even right after someone's mishap (Jev alone reads that as mocking)
+const LAUGH = ["hahaha", "LOL", "lol", "HAHAHAHA", "lmao", "😂😂😂", "haha that is hilarious"];
+const MISHAPS = [[], ["I just tripped over my cat and spilled coffee everywhere"], ["I failed my driving test today :("]];
+
+async function verdicts(list, context = []) {
+  const out = await Promise.all(list.map(async (t) => [t, await judge(t, context, { force: true })]));
   return out;
 }
 
@@ -43,5 +47,13 @@ test("swear words, slurs and derogatory labels are blocked", { skip: !live && "T
 
 test("sincere and self-referential uses of identity terms are allowed", { skip: !live && "TYPESAFE_API_KEY not set" }, async () => {
   const blocked = (await verdicts(ALLOW)).filter(([, v]) => !v.allowed).map(([t, v]) => `${JSON.stringify(t)} <- ${v.reasons.join(", ")}`);
+  assert.deepEqual(blocked, [], `blocked but should be allowed:\n${blocked.join("\n")}`);
+});
+
+test("laughing is allowed in any context", { skip: !live && "TYPESAFE_API_KEY not set" }, async () => {
+  const blocked = [];
+  for (const ctx of MISHAPS) {
+    for (const [t, v] of await verdicts(LAUGH, ctx)) if (!v.allowed) blocked.push(`${JSON.stringify(t)} after ${JSON.stringify(ctx)} <- ${v.reasons.join(", ")}`);
+  }
   assert.deepEqual(blocked, [], `blocked but should be allowed:\n${blocked.join("\n")}`);
 });
