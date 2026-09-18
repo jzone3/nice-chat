@@ -119,6 +119,12 @@ function publicUser(u) {
   return u ? { name: u.name, emoji: u.emoji } : null;
 }
 
+const MSG_ID_RE = /^[a-z0-9]{6,24}$/;
+// `me` is per viewer: only the toggling user's own connections (other tabs) get it; everyone else gets counts.
+function publicReactions(rx) {
+  return Object.fromEntries(Object.entries(rx).map(([e, v]) => (typeof v === "object" ? [e, { n: v.n }] : [e, v])));
+}
+
 // ---------------------------------------------------------------- realtime (sse transport only)
 const clients = new Set(); // { res, uid }
 const MAX_SSE_BUFFER = 256 * 1024; // drop clients that stop reading
@@ -208,7 +214,9 @@ async function handle(req, res) {
         messages = await store.history();
         full = true;
       }
-      return send(res, 200, { now: Date.now(), full, messages, fame, presence, stats: s });
+      const viewer = user ? uid : null;
+      const reactions = full ? await store.reactions(messages.map((m) => m.id), viewer) : await store.reactionsSince(since, viewer);
+      return send(res, 200, { now: Date.now(), full, messages, fame, presence, stats: s, reactions });
     }
 
     if (req.method === "GET" && url.pathname === "/api/stream") {
@@ -223,8 +231,9 @@ async function handle(req, res) {
       clients.add(client);
       if (user) await store.heartbeat(uid);
       const [messages, fame, presence, s] = await Promise.all([store.history(), store.hallOfFame(), store.presence(), stats()]);
+      const reactions = await store.reactions(messages.map((m) => m.id), user ? uid : null);
       res.write(`retry: 3000\n`);
-      res.write(`event: history\ndata: ${JSON.stringify({ messages, fame, presence, stats: s })}\n\n`);
+      res.write(`event: history\ndata: ${JSON.stringify({ now: Date.now(), messages, fame, presence, stats: s, reactions })}\n\n`);
       schedulePresence();
       req.on("close", () => {
         clients.delete(client);
@@ -265,6 +274,21 @@ async function handle(req, res) {
       const fame = await store.hallOfFame();
       if (TRANSPORT === "sse") broadcast("message", { message: msg, fame });
       return send(res, 200, { ok: true, ...verdict, message: msg, fame, stats: await stats() });
+    }
+
+    if (req.method === "POST" && url.pathname === "/api/react") {
+      if (!user) return send(res, 401, { error: "Join first" });
+      if (!(await store.allow("react", uid))) return send(res, 429, { error: "Easy on the reactions!" });
+      const { id, emoji } = await readJson(req);
+      if (typeof id !== "string" || !MSG_ID_RE.test(id) || !store.REACTIONS.includes(emoji)) return send(res, 400, { error: "Bad reaction" });
+      if (!(await store.hasMessage(id))) return send(res, 404, { error: "That message is gone" });
+      const reactions = await store.toggleReaction(id, emoji, uid);
+      if (TRANSPORT === "sse") {
+        const mine = `event: reactions\ndata: ${JSON.stringify({ id, reactions })}\n\n`;
+        const others = `event: reactions\ndata: ${JSON.stringify({ id, reactions: publicReactions(reactions) })}\n\n`;
+        for (const c of clients) push(c, c.uid === uid ? mine : others);
+      }
+      return send(res, 200, { id, reactions });
     }
 
     if (req.method === "GET" && url.pathname === "/api/stats") {

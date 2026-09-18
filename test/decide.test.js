@@ -9,6 +9,8 @@ function answers(over = {}) {
     is_sarcastic_or_backhanded: { noul: 0.03 },
     is_passive_aggressive: { noul: 0.02 },
     is_profane_or_slur: { noul: 0.01 },
+    is_derogatory_label: { noul: 0.02 },
+    is_hateful: { noul: 0.01 },
     is_harassment_or_threat: { noul: 0.01 },
     tone: { choice: "warm", probabilities: { warm: 0.9, neutral: 0.08, cold: 0.01, hostile: 0.01 } },
     niceness: { score: 3.6, probabilities: { 0: 0, 1: 0.01, 2: 0.05, 3: 0.3, 4: 0.64 } },
@@ -57,6 +59,26 @@ test("mild sarcasm is blocked but with moderate meanness", () => {
 test("very kind message survives a soft flag", () => {
   const d = decide(answers({ is_passive_aggressive: { noul: 0.7 }, is_kind: { noul: 0.92 } }));
   assert.equal(d.allowed, true);
+});
+
+test("bare derogatory label blocks even when otherwise neutral and not rescued by kindness", () => {
+  const d = decide(
+    answers({
+      is_kind: { noul: 0.9 },
+      is_derogatory_label: { noul: 0.88 },
+      tone: { choice: "neutral", probabilities: { warm: 0.2, neutral: 0.7, cold: 0.08, hostile: 0.02 } },
+      niceness: { score: 1.7, probabilities: { 0: 0.05, 1: 0.3, 2: 0.55, 3: 0.1, 4: 0 } },
+    })
+  );
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["is_derogatory_label"]);
+  assert.ok(d.meanness >= 0.85, `meanness ${d.meanness}`);
+});
+
+test("hateful generalisation is a hard block", () => {
+  const d = decide(answers({ is_hateful: { noul: 0.6 }, is_kind: { noul: 0.9 } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["is_hateful"]);
 });
 
 test("plain but too-cold message is blocked on niceness floor", () => {

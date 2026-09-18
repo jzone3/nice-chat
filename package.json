@@ -8,7 +8,9 @@
   "scripts": {
     "start": "node server.js",
     "check": "node --check server.js && node --check handler.js && node --check jev.js && node --check store.js && node --check redis.js && node --check api/index.js && node --check public/app.js",
-    "test": "node --test test/*.test.js"
+    "test": "node --test test/*.test.js",
+    "test:live": "node --test test/moderation.live.js",
+    "probe": "node scripts/probe.js"
   },
   "license": "MIT"
 }

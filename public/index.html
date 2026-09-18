@@ -7,10 +7,12 @@
   <meta name="description" content="One big chat room where every message is checked for niceness before it lands. Be kind, or wiggle." />
   <meta property="og:title" content="Nice Chat 💖" />
   <meta property="og:description" content="One big chat room where only nice messages get through. Powered by Jev." />
+  <meta property="og:url" content="https://benicechat.com/" />
+  <link rel="canonical" href="https://benicechat.com/" />
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=8" />
+  <link rel="stylesheet" href="style.css?v=12" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -39,7 +41,7 @@
       <div class="thread" id="thread" aria-live="polite">
         <div class="thread-hello" id="thread-hello">
           <div class="big">👋</div>
-          <p>Welcome to the one big room. Say something kind and it shows up for everyone. Say something mean and… the button will let you know.</p>
+          <p>Welcome to the one big room. It's live-only: you see what's said while you're here, and a refresh starts fresh. Say something kind and it shows up for everyone. Say something mean and… the button will let you know.</p>
         </div>
       </div>
 
@@ -81,7 +83,7 @@
           <div><dt>avg latency</dt><dd id="s-latency">–</dd></div>
           <div><dt>model</dt><dd id="s-model">jev-latest</dd></div>
         </dl>
-        <p class="how">Every message is checked by <strong>Jev</strong>: eight atomic questions (insult? sarcasm? passive-aggressive? …) answered as calibrated probabilities, then plain code decides. The server re-checks on send, so no sneaking past.</p>
+        <p class="how">Every message is checked by <strong>Jev</strong>: ten atomic questions (insult? sarcasm? passive-aggressive? …) answered as calibrated probabilities, then plain code decides. The server re-checks on send, so no sneaking past.</p>
       </section>
     </aside>
   </main>
@@ -96,7 +98,7 @@
     <a href="https://github.com/jzone3/nice-chat" target="_blank" rel="noopener">source</a>
   </footer>
 
-  <div class="modal" id="join-modal">
+  <div class="modal hidden" id="join-modal">
     <form class="join card" id="join-form">
       <h1>💖 Nice Chat</h1>
       <p class="join-sub">One big room. Everyone in the world. Only nice messages get through.</p>
@@ -116,6 +118,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=8"></script>
+  <script src="app.js?v=12"></script>
 </body>
 </html>

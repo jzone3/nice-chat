@@ -13,21 +13,46 @@ const REDIS_URL = process.env.REDIS_URL || process.env.KV_URL || "";
 const PREFIX = process.env.REDIS_PREFIX || "nc:";
 const PRESENCE_TTL_MS = 45_000; // a poller/stream that hasn't checked in for this long is offline
 const FAME_KEEP = 25;
+const REACTIONS = ["❤️", "😂"];
+const REACTION_TTL_S = 60 * 60 * 24 * 30;
 
 // Fixed windows per limiter kind: at most `max` hits per `windowMs` for one key (uid or ip).
 const LIMITS = {
   judge: { max: 8, windowMs: 5_000 }, // as-you-type checks
   send: { max: 5, windowMs: 10_000 }, // real sends
   join: { max: 10, windowMs: 60_000 },
+  react: { max: 30, windowMs: 10_000 },
 };
 
 const pub = (u) => (u ? { name: u.name, emoji: u.emoji } : null);
 const fameSort = (a, b) => b.niceness - a.niceness || b.ts - a.ts;
+// { "❤️": { n: 3, me: true }, "😂": { n: 0, me: false }, at: <ms of last change> } — `at` lets clients drop stale snapshots.
+const shapeReactions = (counts, mine, at) => ({
+  ...Object.fromEntries(REACTIONS.map((e) => [e, { n: Math.max(0, Number(counts[e]) || 0), me: Boolean(mine[e]) }])),
+  at: Number(at) || 0,
+});
+
+// Membership set + count hash + changed-at zset must move together, or overlapping toggles from one
+// user (several tabs) can double-decrement.
+const TOGGLE_LUA = `
+local added = redis.call('SADD', KEYS[1], ARGV[1])
+if added == 1 then
+  redis.call('HINCRBY', KEYS[2], ARGV[2], 1)
+else
+  redis.call('SREM', KEYS[1], ARGV[1])
+  if tonumber(redis.call('HINCRBY', KEYS[2], ARGV[2], -1)) < 0 then redis.call('HSET', KEYS[2], ARGV[2], 0) end
+end
+redis.call('ZADD', KEYS[3], ARGV[3], ARGV[4])
+redis.call('ZREMRANGEBYRANK', KEYS[3], 0, -tonumber(ARGV[6]) - 1)
+redis.call('EXPIRE', KEYS[1], ARGV[5])
+redis.call('EXPIRE', KEYS[2], ARGV[5])
+return added`;
 
 // ------------------------------------------------------------------ memory
 function memoryStore() {
-  const state = { users: {}, messages: [] };
+  const state = { users: {}, messages: [], reactions: {} }; // reactions: id -> emoji -> [uid]
   const seen = new Map(); // uid -> last heartbeat
+  const reactedAt = new Map(); // message id -> last reaction change ms
   const hits = new Map(); // limiter key -> { n, reset }
   let saveTimer = null;
   const stats = { requests: 0, blocked: 0, total_latency_ms: 0 };
@@ -37,6 +62,7 @@ function memoryStore() {
       const raw = JSON.parse(fs.readFileSync(DATA_FILE, "utf8"));
       if (raw && typeof raw.users === "object") state.users = raw.users;
       if (Array.isArray(raw?.messages)) state.messages = raw.messages.slice(-MAX_MESSAGES);
+      if (raw?.reactions && typeof raw.reactions === "object") state.reactions = raw.reactions;
       console.log(`[store] loaded ${state.messages.length} messages, ${Object.keys(state.users).length} users from ${DATA_FILE}`);
     } catch (e) {
       if (e.code !== "ENOENT") console.error("[store] load failed:", e.message);
@@ -69,6 +95,21 @@ function memoryStore() {
     for (const [k, h] of hits) if (h.reset < now) hits.delete(k);
   }, 60_000).unref();
 
+  function reactionsFor(ids, uid) {
+    const out = {};
+    for (const id of ids) {
+      const byEmoji = state.reactions[id] || {};
+      const counts = {};
+      const mine = {};
+      for (const e of REACTIONS) {
+        counts[e] = (byEmoji[e] || []).length;
+        mine[e] = Boolean(uid) && (byEmoji[e] || []).includes(uid);
+      }
+      out[id] = shapeReactions(counts, mine, reactedAt.get(id));
+    }
+    return out;
+  }
+
   return {
     kind: "memory",
     shared: false,
@@ -85,9 +126,34 @@ function memoryStore() {
     },
     async addMessage(msg) {
       state.messages.push(msg);
-      if (state.messages.length > MAX_MESSAGES) state.messages.splice(0, state.messages.length - MAX_MESSAGES);
+      if (state.messages.length > MAX_MESSAGES) {
+        for (const old of state.messages.splice(0, state.messages.length - MAX_MESSAGES)) {
+          delete state.reactions[old.id];
+          reactedAt.delete(old.id);
+        }
+      }
       scheduleSave();
       return msg;
+    },
+    async hasMessage(id) {
+      return state.messages.some((m) => m.id === id);
+    },
+    async toggleReaction(id, emoji, uid) {
+      const byEmoji = (state.reactions[id] ||= {});
+      const uids = (byEmoji[emoji] ||= []);
+      const i = uids.indexOf(uid);
+      if (i >= 0) uids.splice(i, 1);
+      else uids.push(uid);
+      reactedAt.set(id, Date.now());
+      scheduleSave();
+      return reactionsFor([id], uid)[id];
+    },
+    async reactions(ids, uid) {
+      return reactionsFor(ids, uid);
+    },
+    async reactionsSince(ts, uid) {
+      const ids = [...reactedAt].filter(([, t]) => t >= ts).map(([id]) => id);
+      return reactionsFor(ids, uid);
     },
     async history() {
       return state.messages.slice(-HISTORY);
@@ -142,6 +208,9 @@ function redisStore(url) {
     fame: `${PREFIX}fame`, // zset score=niceness member=JSON
     presence: `${PREFIX}presence`, // zset score=last heartbeat ms member=uid
     stats: `${PREFIX}stats`, // hash
+    rx: (id) => `${PREFIX}rx:${id}`, // hash emoji -> count
+    rxu: (id) => `${PREFIX}rxu:${id}`, // set of "emoji:uid"
+    rxts: `${PREFIX}rxts`, // zset score=last change ms member=message id
     rl: (kind, key, win) => `${PREFIX}rl:${kind}:${key}:${win}`,
   };
   const parseAll = (arr) => (arr || []).map((s) => JSON.parse(s));
@@ -167,6 +236,31 @@ function redisStore(url) {
     ]);
     const people = (await usersByUid(uids || [])).filter(Boolean).map(pub);
     return { online: Number(online), people };
+  }
+
+  async function reactionsFor(ids, uid) {
+    if (!ids.length) return {};
+    const cmds = [];
+    for (const id of ids) {
+      cmds.push(["HGETALL", K.rx(id)], ["ZSCORE", K.rxts, id]);
+      if (uid) cmds.push(["SMISMEMBER", K.rxu(id), ...REACTIONS.map((e) => `${e}:${uid}`)]);
+    }
+    const replies = await write(cmds);
+    const out = {};
+    let i = 0;
+    for (const id of ids) {
+      const h = replies[i++] || [];
+      const counts = {};
+      for (let j = 0; j < h.length; j += 2) counts[h[j]] = h[j + 1];
+      const at = replies[i++];
+      const mine = {};
+      if (uid) {
+        const flags = replies[i++] || [];
+        REACTIONS.forEach((e, k) => (mine[e] = Number(flags[k]) === 1));
+      }
+      out[id] = shapeReactions(counts, mine, at);
+    }
+    return out;
   }
 
   return {
@@ -199,6 +293,20 @@ function redisStore(url) {
       }
       await write(cmds);
       return msg;
+    },
+    async hasMessage(id) {
+      return (await this.history()).some((m) => m.id === id);
+    },
+    async toggleReaction(id, emoji, uid) {
+      await r.exec(["EVAL", TOGGLE_LUA, "3", K.rxu(id), K.rx(id), K.rxts, `${emoji}:${uid}`, emoji, String(Date.now()), id, String(REACTION_TTL_S), String(MAX_MESSAGES)]);
+      return (await reactionsFor([id], uid))[id];
+    },
+    async reactions(ids, uid) {
+      return reactionsFor(ids, uid);
+    },
+    async reactionsSince(ts, uid) {
+      const ids = (await r.exec(["ZRANGEBYSCORE", K.rxts, String(ts), "+inf"])) || [];
+      return reactionsFor(ids, uid);
     },
     async history() {
       return parseAll(await r.exec(["LRANGE", K.messages, String(-HISTORY), "-1"]));
@@ -253,3 +361,4 @@ function redisStore(url) {
 
 module.exports = REDIS_URL ? redisStore(REDIS_URL) : memoryStore();
 module.exports.HISTORY = HISTORY;
+module.exports.REACTIONS = REACTIONS;

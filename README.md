@@ -4,6 +4,8 @@
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
+**Live at https://benicechat.com**
+
 Every draft is scored by [Jev](https://docs.typesafe.ai) while you type, and again on the
 server when you hit send. Mean messages never land — the Send button just wiggles
 (harder the meaner you were) and tells you why.
@@ -23,11 +25,14 @@ Built by Devin — https://builtbydevin.ai/
   with presence, a "nicest things said" leaderboard, and live Jev stats.
 - **Username + emoji.** Pick a name and an emoji to join. A cookie remembers you on
   that computer, so refreshing or coming back later drops you straight into the room.
+- **Live-only thread.** You only see what's said while you're connected; a refresh
+  starts with an empty thread. (The server keeps a short rolling buffer so pollers and
+  reactions work, but no history is replayed to anyone.)
 
 ## How moderation works
 
 Jev is not a text-generating LLM — it returns calibrated probabilities that code can
-branch on. Each check is **one request with eight atomic questions** about the draft
+branch on. Each check is **one request with ten atomic questions** about the draft
 (plus the last few room messages for context):
 
 | id | type | question |
@@ -37,6 +42,8 @@ branch on. Each check is **one request with eight atomic questions** about the d
 | `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
 | `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |
 | `is_profane_or_slur` | Noul | Profanity or slurs? |
+| `is_derogatory_label` | Noul | A word used as a put-down / jeer (a bare "gay", "karen", "that's so autistic")? Sincere uses ("I'm gay and proud") are not. |
+| `is_hateful` | Noul | Contempt or stereotypes aimed at a group? |
 | `is_harassment_or_threat` | Noul | Harassing or threatening? |
 | `tone` | Choice | warm / neutral / cold / hostile |
 | `niceness` | Score | 1 (mean) … 5 (lovely) |
@@ -60,7 +67,9 @@ Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DA
 
 ```bash
 npm run check   # syntax-check every file
-npm test        # decision-logic tests (no network)
+npm test        # decision-logic + store tests (no network)
+npm run test:live  # real-Jev moderation set: swear words, slurs, put-downs blocked; sincere identity talk allowed
+npm run probe -- "some text" "other text"   # print Jev's verdict + top probabilities for any drafts
 ```
 
 ### Docker

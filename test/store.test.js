@@ -28,6 +28,26 @@ test("memory store: users, history, since, fame, presence", async () => {
   assert.equal((await store.presence()).online, 0);
 });
 
+test("memory store: reactions toggle per user, counts shared, `me` per viewer", async () => {
+  const other = "00000000-0000-4000-8000-000000000002";
+  assert.equal(await store.hasMessage("m2"), true);
+  assert.equal(await store.hasMessage("nope"), false);
+  const before = Date.now();
+  const first = await store.toggleReaction("m2", "❤️", uid);
+  assert.ok(first.at >= before, `at ${first.at}`);
+  assert.deepEqual(first, { "❤️": { n: 1, me: true }, "😂": { n: 0, me: false }, at: first.at });
+  await store.toggleReaction("m2", "❤️", other);
+  await store.toggleReaction("m2", "😂", other);
+  const both = await store.reactions(["m2", "m3"], uid);
+  assert.deepEqual(both["m2"], { "❤️": { n: 2, me: true }, "😂": { n: 1, me: false }, at: both["m2"].at });
+  assert.deepEqual(both["m3"], { "❤️": { n: 0, me: false }, "😂": { n: 0, me: false }, at: 0 });
+  assert.deepEqual((await store.reactions(["m2"], null))["m2"]["❤️"], { n: 2, me: false });
+  // toggling again removes only my own reaction
+  assert.deepEqual((await store.toggleReaction("m2", "❤️", uid))["❤️"], { n: 1, me: false });
+  assert.deepEqual(Object.keys(await store.reactionsSince(before, uid)), ["m2"]);
+  assert.deepEqual(await store.reactionsSince(Date.now() + 1000, uid), {});
+});
+
 test("memory store: fixed-window rate limit and stats", async () => {
   const results = [];
   for (let i = 0; i < 7; i++) results.push(await store.allow("send", uid));

@@ -20,9 +20,12 @@
     is_sarcastic_or_backhanded: "sarcasm",
     is_passive_aggressive: "passive-aggr.",
     is_profane_or_slur: "profanity/slur",
+    is_derogatory_label: "put-down label",
+    is_hateful: "hateful",
     is_harassment_or_threat: "harass/threat",
   };
   const FACES = ["😡", "😒", "😐", "😊", "🥰"];
+  const REACTIONS = ["❤️", "😂"];
 
   let me = null;
   let latest = null; // last verdict for the current draft
@@ -152,10 +155,15 @@
   let pollCursor = 0;
   const POLL_OVERLAP_MS = 10_000;
   let polling = false;
+  // The thread is live-only: nothing said before this page loaded is shown, so a refresh starts clean.
+  // Server time (from the first payload) so it compares with message ts regardless of the local clock.
+  let joinedAt = 0;
 
   function applyHistory(d) {
+    if (!joinedAt) joinedAt = d.now || Date.now();
     el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
     for (const m of d.messages) addMessage(m, false);
+    applyReactions(d.reactions);
     scrollDown(true);
     renderFame(d.fame);
     renderPresence(d.presence);
@@ -173,6 +181,10 @@
       renderFame(d.fame);
     });
     es.addEventListener("presence", (ev) => renderPresence(JSON.parse(ev.data)));
+    es.addEventListener("reactions", (ev) => {
+      const d = JSON.parse(ev.data);
+      applyReactions({ [d.id]: d.reactions });
+    });
     es.onerror = () => { el.online.textContent = "…"; };
   }
 
@@ -185,11 +197,12 @@
       if (data.full) applyHistory(data);
       else {
         for (const m of data.messages) addMessage(m, true);
+        applyReactions(data.reactions);
         renderFame(data.fame);
         renderPresence(data.presence);
         renderStats(data.stats);
       }
-      pollCursor = Math.max(pollCursor, (data.now || Date.now()) - POLL_OVERLAP_MS);
+      pollCursor = Math.max(pollCursor, (data.now || Date.now()) - POLL_OVERLAP_MS, joinedAt);
     } catch {
       el.online.textContent = "…";
     } finally {
@@ -214,6 +227,7 @@
   }
 
   function addMessage(m, live) {
+    if (m.ts < joinedAt) return;
     if (m.id && el.thread.querySelector(`.msg[data-id="${m.id}"]`)) return;
     el.hello.style.display = "none";
     const stick = nearBottom();
@@ -228,8 +242,21 @@
       <div class="bubble">
         <div class="meta"><span class="name"></span><span class="time">${fmtTime(m.ts)}</span><span class="nice-badge"></span></div>
         <p class="text"></p>
+        <div class="reacts"></div>
         <div class="probs"></div>
       </div>`;
+    const reacts = node.querySelector(".reacts");
+    for (const e of REACTIONS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "react";
+      b.dataset.emoji = e;
+      b.title = e === "❤️" ? "Love" : "Haha";
+      b.innerHTML = `<span class="e"></span><span class="n"></span>`;
+      b.querySelector(".e").textContent = e;
+      b.addEventListener("click", () => react(m.id, e, b));
+      reacts.append(b);
+    }
     node.querySelector(".avatar").textContent = m.emoji;
     node.querySelector(".name").textContent = m.name;
     node.querySelector(".text").textContent = m.text;
@@ -243,6 +270,53 @@
     else el.thread.append(node);
     while (el.thread.querySelectorAll(".msg").length > 300) el.thread.querySelector(".msg").remove();
     if (live ? stick : true) scrollDown(true);
+  }
+
+  // Snapshots arrive from the POST reply, polls and SSE in no fixed order; `at` (server ms of the last
+  // change) keeps an older one from overwriting a newer. Other viewers' SSE copies carry counts only,
+  // so `me` is kept as-is when absent.
+  function applyReactions(map) {
+    for (const [id, rx] of Object.entries(map || {})) {
+      const node = el.thread.querySelector(`.msg[data-id="${id}"]`);
+      if (!node) continue;
+      const at = Number(rx.at) || 0;
+      if (at < Number(node.dataset.rxAt || 0)) continue;
+      node.dataset.rxAt = at;
+      for (const b of node.querySelectorAll(".react")) {
+        const r = rx[b.dataset.emoji];
+        if (!r || typeof r !== "object") continue;
+        b.querySelector(".n").textContent = r.n > 0 ? r.n : "";
+        if (r.me !== undefined) b.classList.toggle("on", r.me);
+      }
+    }
+  }
+
+  async function react(id, emoji, btn) {
+    if (!me) return toast("Join first to react!");
+    if (!id || btn.disabled) return;
+    // optimistic flip; the server answer below is authoritative
+    const was = btn.classList.contains("on");
+    const n = Number(btn.querySelector(".n").textContent) || 0;
+    btn.classList.toggle("on", !was);
+    btn.querySelector(".n").textContent = Math.max(0, n + (was ? -1 : 1)) || "";
+    btn.classList.remove("pop");
+    void btn.offsetWidth;
+    btn.classList.add("pop");
+    btn.disabled = true;
+    try {
+      const { ok, data } = await api("/api/react", { id, emoji });
+      if (ok) applyReactions({ [id]: data.reactions });
+      else {
+        btn.classList.toggle("on", was);
+        btn.querySelector(".n").textContent = n || "";
+        toast(data.error || "Couldn't react");
+      }
+    } catch {
+      btn.classList.toggle("on", was);
+      btn.querySelector(".n").textContent = n || "";
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function renderFame(list) {
@@ -436,9 +510,26 @@
   });
 
   // ------------------------------------------------------------ boot
+  // The join card stays hidden until the server has actually answered who we are: a cold start or a
+  // flaky request must not look like "you have no account" to someone who already joined.
+  async function whoami() {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const { ok, status, data } = await api("/api/me");
+        if (ok) return data;
+        if (status < 500 || attempt >= 3) return data;
+      } catch {
+        if (attempt >= 3) return {};
+      }
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
+  }
+
   (async () => {
-    let data = {};
-    try { ({ data } = await api("/api/me")); } catch {}
+    const placeholder = el.draft.placeholder;
+    el.draft.placeholder = "Connecting…";
+    const data = await whoami();
+    el.draft.placeholder = placeholder;
     if (data.transport === "poll") { transport = "poll"; pollMs = data.poll_ms || pollMs; }
     connect();
     if (data.user) enter(data.user);
