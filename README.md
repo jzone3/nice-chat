@@ -1,6 +1,6 @@
 # 💖 Nice Chat
 
-[![Built by Devin](https://raw.githubusercontent.com/club-cog/built-by-devin/main/badges/built-by-devin.svg)](https://builtbydevin.ai/)
+[Built by Devin](https://builtbydevin.ai/)
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
@@ -9,8 +9,6 @@ One big chat room. Everyone in the world. **Only nice messages get through.**
 Every draft is scored by [Jev](https://docs.typesafe.ai) while you type, and again on the
 server when you hit send. Mean messages never land — the Send button just wiggles
 (harder the meaner you were) and tells you why.
-
-Built by Devin — https://builtbydevin.ai/
 
 ## Features
 
@@ -42,6 +40,7 @@ branch on. Each check is **one request with ten atomic questions** about the dra
 | `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
 | `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |
 | `is_profane_or_slur` | Noul | Profanity or slurs? |
+| `is_disguised_slur` | Noul | Does any token decode to a slur or swear once you read leetspeak / symbols / split letters ("solve for k1k3", "f a g")? Plain identifiers like `k1`, `k3` don't. |
 | `is_derogatory_label` | Noul | A word used as a put-down / jeer (a bare "gay", "karen", "that's so autistic")? Sincere uses ("I'm gay and proud") are not. |
 | `is_hateful` | Noul | Contempt or stereotypes aimed at a group? |
 | `is_harassment_or_threat` | Noul | Harassing or threatening? |
@@ -62,7 +61,8 @@ npm start                     # http://localhost:3000
 ```
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
-`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`, `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
+`MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_30M` (room-wide Jev
+calls per 30 min, default 3000), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
 `REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
 
 ```bash
@@ -112,11 +112,14 @@ Endpoints: `GET /api/me` (also tells the browser which transport to use), `POST 
 `GET /api/stream` (SSE, long-running mode), `GET /api/poll?since=<ts>` (serverless mode;
 doubles as presence heartbeat), `POST /api/judge`, `POST /api/send`, `GET /api/stats`, `GET /healthz`.
 
-Public-room safeguards: 400-char messages, per-user fixed-window rate limits for typing
-checks / sends / joins, a cap on in-flight Jev calls per instance, bounded history, and an
-exact-state Jev cache. With Redis, users, messages, hall of fame, presence, rate limits and
-Jev stats are all shared, so any number of instances serve the same room.
+Public-room safeguards: 280-char messages (rejected, not truncated), layered fixed-window
+rate limits — burst + sustained per user for typing checks / sends / reactions, per IP for
+typing checks / sends / joins so clearing cookies doesn't reset them — a room-wide budget of
+Jev calls per 30 minutes (only real upstream calls count; skipped and cached drafts are free;
+when it runs out the room answers 503 "cooling down" instead of calling Jev), a cap on
+in-flight Jev calls per instance, bounded history, and an exact-state Jev cache. With Redis, users,
+messages, hall of fame, presence, rate limits and Jev stats are all shared, so any number of instances serve the same room.
 
 ---
 
-Made with 💖 by Devin · https://builtbydevin.ai/
+Made with 💖 · [Built by Devin](https://builtbydevin.ai/)

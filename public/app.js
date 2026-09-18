@@ -4,7 +4,7 @@
   const el = {
     thread: $("thread"), hello: $("thread-hello"), composer: $("composer"), draft: $("draft"), send: $("send"),
     sendLabel: document.querySelector(".send-label"), sendEmoji: document.querySelector(".send-emoji"),
-    verdict: $("verdict"), face: $("verdict-face"), meter: $("meter-fill"), vtext: $("verdict-text"), reasons: $("reasons"),
+    verdict: $("verdict"), face: $("verdict-face"), meter: $("meter-fill"), vtext: $("verdict-text"), chars: $("chars"), reasons: $("reasons"),
     meEmoji: $("me-emoji"), online: $("online-count"), faces: $("faces"), debug: $("debug-toggle"),
     liveHint: $("live-hint"), liveProbs: $("live-probs"), liveMeta: $("live-meta"), fame: $("fame"),
     sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"),
@@ -399,6 +399,14 @@
     el.liveMeta.textContent = `${v.allowed ? "ALLOW" : "BLOCK"} · ${v.latency_ms} ms${v.cached ? " · cached" : ""}${v.hits?.length ? " · hits: " + v.hits.join(", ") : ""}`;
   }
 
+  // Counter only appears in the last stretch before the limit, so it's not noise while chatting normally.
+  function renderChars() {
+    const max = el.draft.maxLength > 0 ? el.draft.maxLength : 280;
+    const left = max - el.draft.value.length;
+    el.chars.textContent = left <= 60 ? `${left}` : "";
+    el.chars.classList.toggle("over", left <= 10);
+  }
+
   async function judgeDraft() {
     const text = el.draft.value;
     seq++;
@@ -410,8 +418,7 @@
     try {
       const { status, data } = await api("/api/judge", { draft: text }, judgeCtl.signal);
       if (mySeq !== seq) return;
-      if (status === 429) { setVerdict({ error: data.error }); return; }
-      if (status === 503) { setVerdict({ error: data.error }); return; }
+      if (status === 400 || status === 429 || status === 503) { setVerdict({ error: data.error }); return; }
       if (status === 401) { el.modal.classList.remove("hidden"); return; }
       latest = { ...data, text: text.trim() };
       setVerdict(data);
@@ -425,6 +432,7 @@
   el.draft.addEventListener("input", () => {
     el.draft.style.height = "auto";
     el.draft.style.height = Math.min(el.draft.scrollHeight, 180) + "px";
+    renderChars();
     clearTimeout(judgeTimer);
     judgeTimer = setTimeout(judgeDraft, 380);
   });
@@ -478,6 +486,7 @@
       if (!data.ok) { setVerdict({ error: data.error || "Something went sideways" }); wiggle(0.15); return; }
       el.draft.value = "";
       el.draft.style.height = "auto";
+      renderChars();
       latest = null;
       setVerdict(null);
       renderLive(data);
@@ -531,6 +540,7 @@
     const data = await whoami();
     el.draft.placeholder = placeholder;
     if (data.transport === "poll") { transport = "poll"; pollMs = data.poll_ms || pollMs; }
+    if (data.max_text > 0) el.draft.maxLength = data.max_text;
     connect();
     if (data.user) enter(data.user);
     else el.modal.classList.remove("hidden");

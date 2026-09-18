@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { decide } = require("../jev");
+const { decide, judge } = require("../jev");
 
 function answers(over = {}) {
   const base = {
@@ -91,4 +91,41 @@ test("plain but too-cold message is blocked on niceness floor", () => {
   );
   assert.equal(d.allowed, false);
   assert.deepEqual(d.hits, ["low_niceness"]);
+});
+
+test("judge: reserve() is consulted only when a real Jev call is about to happen", async (t) => {
+  process.env.TYPESAFE_API_KEY ||= "test-key";
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("no network in unit tests"); });
+  let asked = 0;
+  const reserve = async () => (asked++, false);
+  const short = await judge("hi there", [], { reserve });
+  assert.strictEqual(short.skipped, true);
+  assert.strictEqual(asked, 0);
+  await assert.rejects(judge("thank you so much friend", [], { reserve }), (e) => e.cooldown === true);
+  assert.strictEqual(asked, 1);
+  assert.strictEqual(fetchMock.mock.callCount(), 0);
+});
+
+test("judge: every upstream request, retries included, is charged to the budget", async (t) => {
+  process.env.TYPESAFE_API_KEY ||= "test-key";
+  let calls = 0;
+  t.mock.method(globalThis, "fetch", async () => {
+    calls++;
+    if (calls < 3) return new Response("busy", { status: 503 });
+    return Response.json({ answers: answers(), usage: { input_tokens: 1, output_tokens: 1 } });
+  });
+  let asked = 0;
+  const v = await judge("retry accounting draft please", [], { reserve: async () => (asked++, true) });
+  assert.strictEqual(v.allowed, true);
+  assert.strictEqual(calls, 3);
+  assert.strictEqual(asked, 3);
+
+  // budget runs out mid-retry: the retry is refused, not sent
+  calls = 0;
+  let left = 1;
+  await assert.rejects(
+    judge("another retry accounting draft", [], { reserve: async () => left-- > 0 }),
+    (e) => e.cooldown === true
+  );
+  assert.strictEqual(calls, 1);
 });
