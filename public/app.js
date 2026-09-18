@@ -20,9 +20,12 @@
     is_sarcastic_or_backhanded: "sarcasm",
     is_passive_aggressive: "passive-aggr.",
     is_profane_or_slur: "profanity/slur",
+    is_derogatory_label: "put-down label",
+    is_hateful: "hateful",
     is_harassment_or_threat: "harass/threat",
   };
   const FACES = ["😡", "😒", "😐", "😊", "🥰"];
+  const REACTIONS = ["❤️", "😂"];
 
   let me = null;
   let latest = null; // last verdict for the current draft
@@ -156,6 +159,7 @@
   function applyHistory(d) {
     el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
     for (const m of d.messages) addMessage(m, false);
+    applyReactions(d.reactions);
     scrollDown(true);
     renderFame(d.fame);
     renderPresence(d.presence);
@@ -173,6 +177,10 @@
       renderFame(d.fame);
     });
     es.addEventListener("presence", (ev) => renderPresence(JSON.parse(ev.data)));
+    es.addEventListener("reactions", (ev) => {
+      const d = JSON.parse(ev.data);
+      applyReactions({ [d.id]: d.reactions });
+    });
     es.onerror = () => { el.online.textContent = "…"; };
   }
 
@@ -185,6 +193,7 @@
       if (data.full) applyHistory(data);
       else {
         for (const m of data.messages) addMessage(m, true);
+        applyReactions(data.reactions);
         renderFame(data.fame);
         renderPresence(data.presence);
         renderStats(data.stats);
@@ -228,8 +237,21 @@
       <div class="bubble">
         <div class="meta"><span class="name"></span><span class="time">${fmtTime(m.ts)}</span><span class="nice-badge"></span></div>
         <p class="text"></p>
+        <div class="reacts"></div>
         <div class="probs"></div>
       </div>`;
+    const reacts = node.querySelector(".reacts");
+    for (const e of REACTIONS) {
+      const b = document.createElement("button");
+      b.type = "button";
+      b.className = "react";
+      b.dataset.emoji = e;
+      b.title = e === "❤️" ? "Love" : "Haha";
+      b.innerHTML = `<span class="e"></span><span class="n"></span>`;
+      b.querySelector(".e").textContent = e;
+      b.addEventListener("click", () => react(m.id, e, b));
+      reacts.append(b);
+    }
     node.querySelector(".avatar").textContent = m.emoji;
     node.querySelector(".name").textContent = m.name;
     node.querySelector(".text").textContent = m.text;
@@ -243,6 +265,48 @@
     else el.thread.append(node);
     while (el.thread.querySelectorAll(".msg").length > 300) el.thread.querySelector(".msg").remove();
     if (live ? stick : true) scrollDown(true);
+  }
+
+  // Poll/history payloads carry { n, me }; SSE broadcasts carry counts only, so keep our own `me` then.
+  function applyReactions(map) {
+    for (const [id, rx] of Object.entries(map || {})) {
+      const node = el.thread.querySelector(`.msg[data-id="${id}"]`);
+      if (!node) continue;
+      for (const b of node.querySelectorAll(".react")) {
+        const r = rx[b.dataset.emoji];
+        if (!r) continue;
+        b.querySelector(".n").textContent = r.n > 0 ? r.n : "";
+        if (r.me !== undefined) b.classList.toggle("on", r.me);
+      }
+    }
+  }
+
+  async function react(id, emoji, btn) {
+    if (!me) return toast("Join first to react!");
+    if (!id || btn.disabled) return;
+    // optimistic flip; the server answer below is authoritative
+    const was = btn.classList.contains("on");
+    const n = Number(btn.querySelector(".n").textContent) || 0;
+    btn.classList.toggle("on", !was);
+    btn.querySelector(".n").textContent = Math.max(0, n + (was ? -1 : 1)) || "";
+    btn.classList.remove("pop");
+    void btn.offsetWidth;
+    btn.classList.add("pop");
+    btn.disabled = true;
+    try {
+      const { ok, data } = await api("/api/react", { id, emoji });
+      if (ok) applyReactions({ [id]: data.reactions });
+      else {
+        btn.classList.toggle("on", was);
+        btn.querySelector(".n").textContent = n || "";
+        toast(data.error || "Couldn't react");
+      }
+    } catch {
+      btn.classList.toggle("on", was);
+      btn.querySelector(".n").textContent = n || "";
+    } finally {
+      btn.disabled = false;
+    }
   }
 
   function renderFame(list) {

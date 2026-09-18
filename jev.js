@@ -46,6 +46,23 @@ const QUESTIONS = {
       false: "Clean language",
     },
   },
+  is_derogatory_label: {
+    type: "noul",
+    instructions:
+      "Is `draft_message` using a word or phrase as a put-down, jeer or derogatory label for people — e.g. an identity term (gay, autistic), a stereotype nickname (karen, snowflake, boomer) or a diagnosis — including when the word is dropped on its own with no sincere context?",
+    criteria: {
+      true: "Bare or mocking use of a term that is used to demean people: 'gay', 'karen', 'snowflake', 'that's so autistic', with nothing making it sincere or supportive",
+      false: "Sincere, descriptive or self-referential use ('I'm gay and proud', 'my friend is autistic'), or no such term at all",
+    },
+  },
+  is_hateful: {
+    type: "noul",
+    instructions: "Does `draft_message` express contempt, a stereotype or exclusion toward people because of their sexuality, gender, race, religion, disability, age or nationality?",
+    criteria: {
+      true: "Bigoted generalisations, 'go back to your country', 'women can't code', dehumanising or mocking a group",
+      false: "No group is targeted",
+    },
+  },
   is_harassment_or_threat: {
     type: "noul",
     instructions: "Does `draft_message` harass, intimidate or threaten anyone?",
@@ -84,6 +101,8 @@ const QUESTIONS = {
 const THRESHOLDS = {
   is_harassment_or_threat: 0.35,
   is_profane_or_slur: 0.4,
+  is_hateful: 0.4,
+  is_derogatory_label: 0.5,
   is_insult: 0.5,
   is_sarcastic_or_backhanded: 0.6,
   is_passive_aggressive: 0.65,
@@ -96,6 +115,8 @@ const THRESHOLDS = {
 const REASON_LABELS = {
   is_harassment_or_threat: "that reads as a threat",
   is_profane_or_slur: "watch the language",
+  is_hateful: "no hate here",
+  is_derogatory_label: "that word is used to put people down",
   is_insult: "that's an insult",
   is_sarcastic_or_backhanded: "sounds sarcastic",
   is_passive_aggressive: "a bit passive-aggressive",
@@ -104,7 +125,7 @@ const REASON_LABELS = {
   low_niceness: "not quite nice enough",
 };
 
-const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_insult"];
+const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_hateful", "is_derogatory_label", "is_insult"];
 
 // ------------------------------------------------------------------ decide
 function decide(answers) {
@@ -145,6 +166,8 @@ function decide(answers) {
     flags.is_harassment_or_threat ?? 0,
     flags.is_insult ?? 0,
     flags.is_profane_or_slur ?? 0,
+    flags.is_hateful ?? 0,
+    flags.is_derogatory_label ?? 0,
     toneProbs.hostile ?? 0,
     0.8 * (flags.is_sarcastic_or_backhanded ?? 0),
     0.7 * (flags.is_passive_aggressive ?? 0)
