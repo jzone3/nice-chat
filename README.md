@@ -1,6 +1,6 @@
 # 💖 Nice Chat
 
-[![Built by Devin](https://raw.githubusercontent.com/club-cog/built-by-devin/main/badges/built-by-devin.svg)](https://builtbydevin.ai/)
+[Built by Devin](https://builtbydevin.ai/)
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
@@ -9,8 +9,6 @@ One big chat room. Everyone in the world. **Only nice messages get through.**
 Every draft is scored by [Jev](https://docs.typesafe.ai) while you type, and again on the
 server when you hit send. Mean messages never land — the Send button just wiggles
 (harder the meaner you were) and tells you why.
-
-Built by Devin — https://builtbydevin.ai/
 
 ## Features
 
@@ -124,4 +122,4 @@ messages, hall of fame, presence, rate limits and Jev stats are all shared, so a
 
 ---
 
-Made with 💖 by Devin · https://builtbydevin.ai/
+Made with 💖 · [Built by Devin](https://builtbydevin.ai/)

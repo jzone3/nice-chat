@@ -225,8 +225,7 @@ body.debug .prob.detail { display: grid; }
 .stats dd { margin: 0; font-weight: 700; }
 
 /* ---------------------------------------------------------------- footer */
-.foot { display: flex; justify-content: center; align-items: center; gap: 0.6rem; padding: 0 1rem 0.8rem; font-size: 0.85rem; color: var(--muted); }
-.foot img { vertical-align: middle; border-radius: 6px; }
+.foot { display: flex; justify-content: center; align-items: center; gap: 0.6rem; padding: 0 1rem 0.8rem; font-size: 0.75rem; color: var(--muted); }
 
 /* ---------------------------------------------------------------- join */
 .modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(59, 47, 74, 0.35); backdrop-filter: blur(6px); z-index: 10; }
@@ -307,7 +306,6 @@ body.debug .toast { background: #39ff14; color: #050805; text-shadow: none; }
 body.debug .nice-badge { background: #030503; }
 body.debug .react { background: #030503; border-radius: 4px; }
 body.debug .react.on { background: #123312; border-color: #39ff14; box-shadow: 0 0 8px #39ff14; }
-body.debug .foot img { filter: grayscale(1) brightness(1.4); }
 body.debug .debug-toggle input:checked + .switch::after { background: #050805; }
 body.debug .modal { background: rgba(0, 0, 0, 0.8); }
 body.debug .join { background: var(--paper); }
