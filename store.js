@@ -145,6 +145,13 @@ function redisStore(url) {
     rl: (kind, key, win) => `${PREFIX}rl:${kind}:${key}:${win}`,
   };
   const parseAll = (arr) => (arr || []).map((s) => JSON.parse(s));
+  // pipeline() hands back per-command errors inline; writes must not look successful when one failed.
+  async function write(cmds) {
+    const replies = await r.pipeline(cmds);
+    const err = replies.find((x) => x instanceof Error);
+    if (err) throw err;
+    return replies;
+  }
 
   async function usersByUid(uids) {
     if (!uids.length) return [];
@@ -153,12 +160,13 @@ function redisStore(url) {
   }
 
   async function presence(now = Date.now()) {
-    const [, uids] = await r.pipeline([
+    const [, online, uids] = await write([
       ["ZREMRANGEBYSCORE", K.presence, "-inf", String(now - PRESENCE_TTL_MS)],
-      ["ZRANGE", K.presence, "0", "199"],
+      ["ZCARD", K.presence],
+      ["ZREVRANGE", K.presence, "0", "59"],
     ]);
     const people = (await usersByUid(uids || [])).filter(Boolean).map(pub);
-    return { online: people.length, people: people.slice(0, 60) };
+    return { online: Number(online), people };
   }
 
   return {
@@ -189,7 +197,7 @@ function redisStore(url) {
         cmds.push(["ZADD", K.fame, String(msg.niceness + msg.ts / 1e16), s]);
         cmds.push(["ZREMRANGEBYRANK", K.fame, "0", String(-FAME_KEEP - 1)]);
       }
-      await r.pipeline(cmds);
+      await write(cmds);
       return msg;
     },
     async history() {
@@ -220,11 +228,10 @@ function redisStore(url) {
     async allow(kind, key) {
       const { max, windowMs } = LIMITS[kind];
       const k = K.rl(kind, key, Math.floor(Date.now() / windowMs));
-      const [n] = await r.pipeline([
+      const [n] = await write([
         ["INCR", k],
         ["PEXPIRE", k, String(windowMs * 2)],
       ]);
-      if (n instanceof Error) throw n;
       return Number(n) <= max;
     },
     async bumpStats({ blocked, latency_ms }) {
@@ -233,7 +240,7 @@ function redisStore(url) {
         ["HINCRBY", K.stats, "total_latency_ms", String(Math.round(latency_ms || 0))],
       ];
       if (blocked) cmds.push(["HINCRBY", K.stats, "blocked", "1"]);
-      await r.pipeline(cmds);
+      await write(cmds);
     },
     async stats() {
       const h = (await r.exec(["HGETALL", K.stats])) || [];

@@ -104,7 +104,7 @@ async function gatedJudge(...args) {
   jevInflight++;
   try {
     const verdict = await judge(...args);
-    if (!verdict.cached) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
+    if (!verdict.cached && !verdict.skipped) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
     return verdict;
   } finally {
     jevInflight--;
@@ -135,12 +135,15 @@ function broadcast(event, data) {
   for (const c of clients) push(c, payload);
 }
 
+// Background store calls (timers, close handlers) run outside any request's try/catch.
+const logFail = (what) => (e) => console.error(`[${what}]`, e.message);
+
 let presenceTimer = null;
 function schedulePresence() {
   if (TRANSPORT !== "sse" || presenceTimer) return;
-  presenceTimer = setTimeout(async () => {
+  presenceTimer = setTimeout(() => {
     presenceTimer = null;
-    broadcast("presence", await store.presence());
+    store.presence().then((p) => broadcast("presence", p), logFail("presence"));
   }, 300);
 }
 
@@ -148,7 +151,7 @@ if (TRANSPORT === "sse") {
   setInterval(() => {
     for (const c of clients) {
       push(c, ": ping\n\n");
-      store.heartbeat(c.uid);
+      store.heartbeat(c.uid).catch(logFail("heartbeat"));
     }
   }, 25_000).unref();
 }
@@ -195,11 +198,17 @@ async function handle(req, res) {
     }
 
     // Poll transport: initial call (no `since`) returns history; later calls return what's new. Doubles as presence heartbeat.
+    // A delta that fills the whole HISTORY window may have skipped messages, so it is sent as a full refresh instead.
     if (req.method === "GET" && url.pathname === "/api/poll") {
       const since = Number(url.searchParams.get("since")) || 0;
       if (user) await store.heartbeat(uid);
-      const [messages, fame, presence, s] = await Promise.all([since ? store.since(since) : store.history(), store.hallOfFame(), store.presence(), stats()]);
-      return send(res, 200, { now: Date.now(), full: !since, messages, fame, presence, stats: s });
+      let [messages, fame, presence, s] = await Promise.all([since ? store.since(since) : store.history(), store.hallOfFame(), store.presence(), stats()]);
+      let full = !since;
+      if (!full && messages.length >= store.HISTORY) {
+        messages = await store.history();
+        full = true;
+      }
+      return send(res, 200, { now: Date.now(), full, messages, fame, presence, stats: s });
     }
 
     if (req.method === "GET" && url.pathname === "/api/stream") {
@@ -219,7 +228,7 @@ async function handle(req, res) {
       schedulePresence();
       req.on("close", () => {
         clients.delete(client);
-        if (client.uid && ![...clients].some((c) => c.uid === client.uid)) store.leave(client.uid);
+        if (client.uid && ![...clients].some((c) => c.uid === client.uid)) store.leave(client.uid).catch(logFail("leave"));
         schedulePresence();
       });
       return;

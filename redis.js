@@ -4,12 +4,14 @@ const net = require("net");
 const tls = require("tls");
 
 const CMD_TIMEOUT_MS = 5000;
+const CONNECT_TIMEOUT_MS = 5000;
 
 class RedisError extends Error {}
 
 class Redis {
   constructor(url) {
     const u = new URL(url);
+    if (u.protocol !== "redis:" && u.protocol !== "rediss:") throw new RedisError(`unsupported Redis URL scheme ${u.protocol}`);
     this.host = u.hostname;
     this.port = Number(u.port) || 6379;
     this.tls = u.protocol === "rediss:";
@@ -30,7 +32,9 @@ class Redis {
       const sock = this.tls ? tls.connect({ ...opts, servername: this.host }) : net.connect(opts);
       sock.setNoDelay(true);
       sock.setKeepAlive(true, 15_000);
+      const connectTimer = setTimeout(() => sock.destroy(new RedisError("redis connect timeout")), CONNECT_TIMEOUT_MS);
       const onReady = async () => {
+        clearTimeout(connectTimer);
         this.sock = sock;
         this.buf = Buffer.alloc(0);
         try {
@@ -47,6 +51,7 @@ class Redis {
       sock.once(this.tls ? "secureConnect" : "connect", onReady);
       sock.on("data", (chunk) => this.onData(chunk));
       const fail = (err) => {
+        clearTimeout(connectTimer);
         const e = err || new RedisError("connection closed");
         if (this.sock === sock) this.sock = null;
         this.connecting = null;
