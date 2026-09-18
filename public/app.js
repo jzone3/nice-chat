@@ -1,0 +1,395 @@
+// Nice Chat client: join → stream → type (Jev scores as you go) → send (server re-checks).
+(() => {
+  const $ = (id) => document.getElementById(id);
+  const el = {
+    thread: $("thread"), hello: $("thread-hello"), composer: $("composer"), draft: $("draft"), send: $("send"),
+    sendLabel: document.querySelector(".send-label"), sendEmoji: document.querySelector(".send-emoji"),
+    verdict: $("verdict"), face: $("verdict-face"), meter: $("meter-fill"), vtext: $("verdict-text"), reasons: $("reasons"),
+    meEmoji: $("me-emoji"), online: $("online-count"), faces: $("faces"), debug: $("debug-toggle"),
+    liveHint: $("live-hint"), liveProbs: $("live-probs"), liveMeta: $("live-meta"), fame: $("fame"),
+    sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"),
+    modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
+    pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
+    toast: $("toast"),
+  };
+
+  const EMOJIS = "😀 😎 🥳 🤩 😇 🥰 🤠 🤓 🧐 🥸 😺 🐶 🦊 🐼 🐨 🦁 🐸 🐙 🦄 🐝 🦋 🐢 🐧 🦖 🌈 🌸 🌻 🍀 🌙 ⭐ 🔥 🍕 🍩 🧁 🍓 🥑 🎈 🎨 🎸 🚀 🛸 🧸 🪐 🍄 🐳 🦥 🦩 🫧".split(" ");
+  const FLAG_LABELS = {
+    is_kind: "kind",
+    is_insult: "insult",
+    is_sarcastic_or_backhanded: "sarcasm",
+    is_passive_aggressive: "passive-aggr.",
+    is_profane_or_slur: "profanity/slur",
+    is_harassment_or_threat: "harass/threat",
+  };
+  const FACES = ["😡", "😒", "😐", "😊", "🥰"];
+
+  let me = null;
+  let latest = null; // last verdict for the current draft
+  let seq = 0;
+  let judgeTimer = null;
+  let judgeCtl = null;
+  let sending = false;
+
+  // ------------------------------------------------------------ utils
+  const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  const pct = (p) => `${Math.round((p ?? 0) * 100)}%`;
+  const words = (s) => s.trim().split(/\s+/).filter(Boolean).length;
+
+  function toast(msg, ms = 2200) {
+    el.toast.textContent = msg;
+    el.toast.classList.add("show");
+    clearTimeout(toast.t);
+    toast.t = setTimeout(() => el.toast.classList.remove("show"), ms);
+  }
+
+  async function api(path, body, signal) {
+    const res = await fetch(path, {
+      method: body ? "POST" : "GET",
+      headers: body ? { "Content-Type": "application/json" } : undefined,
+      body: body ? JSON.stringify(body) : undefined,
+      signal,
+    });
+    let data = {};
+    try { data = await res.json(); } catch {}
+    return { status: res.status, ok: res.ok, data };
+  }
+
+  function probRow(label, p, { hot = false, detail = false } = {}) {
+    const row = document.createElement("div");
+    row.className = "prob" + (hot ? " hot" : "") + (detail ? " detail" : "");
+    row.innerHTML = `<span class="lbl"></span><span class="bar"><i style="width:${pct(p)}"></i></span><span class="val">${(p ?? 0).toFixed(2)}</span>`;
+    row.querySelector(".lbl").textContent = label;
+    return row;
+  }
+  function groupRow(text, detail = false) {
+    const row = document.createElement("div");
+    row.className = "prob group" + (detail ? " detail" : "");
+    row.textContent = text;
+    return row;
+  }
+
+  // Renders every probability Jev returned for a draft or a message.
+  function renderProbs(container, v) {
+    container.replaceChildren();
+    if (!v || !v.flags) return;
+    container.append(groupRow("flags (p = yes)"));
+    for (const [k, label] of Object.entries(FLAG_LABELS)) {
+      if (v.flags[k] == null) continue;
+      container.append(probRow(label, v.flags[k], { hot: k !== "is_kind" && (v.hits || []).includes(k) }));
+    }
+    // tone + niceness distributions only show in debugger mode
+    if (v.tone_probs) {
+      container.append(groupRow(`tone → ${v.tone}`, true));
+      for (const [k, p] of Object.entries(v.tone_probs)) container.append(probRow(k, p, { hot: (k === "hostile" || k === "cold") && (v.hits || []).includes(k), detail: true }));
+    }
+    if (v.niceness_probs) {
+      container.append(groupRow(`niceness → ${v.niceness} / 5`, true));
+      for (const [k, p] of Object.entries(v.niceness_probs)) container.append(probRow(`${k} ${FACES[Number(k) - 1] || ""}`, p, { detail: true }));
+    }
+    if (v.meanness != null) container.append(probRow("meanness (wiggle)", v.meanness, { hot: v.meanness >= 0.6 }));
+  }
+
+  // ------------------------------------------------------------ join
+  let pickedEmoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)];
+  function renderGrid() {
+    el.grid.replaceChildren(
+      ...EMOJIS.map((e) => {
+        const b = document.createElement("button");
+        b.type = "button";
+        b.textContent = e;
+        b.setAttribute("role", "radio");
+        b.setAttribute("aria-checked", String(e === pickedEmoji));
+        b.onclick = () => { pickedEmoji = e; renderGrid(); preview(); };
+        return b;
+      })
+    );
+  }
+  function preview() {
+    el.pvEmoji.textContent = pickedEmoji;
+    el.pvName.textContent = el.joinName.value.trim() || "you";
+  }
+  el.shuffle.onclick = () => { pickedEmoji = EMOJIS[Math.floor(Math.random() * EMOJIS.length)]; renderGrid(); preview(); };
+  el.joinName.oninput = preview;
+  renderGrid();
+  preview();
+
+  el.joinForm.onsubmit = async (e) => {
+    e.preventDefault();
+    el.joinErr.textContent = "";
+    el.joinBtn.disabled = true;
+    try {
+      const { ok, data } = await api("/api/join", { name: el.joinName.value, emoji: pickedEmoji });
+      if (!ok) { el.joinErr.textContent = data.error || "Hmm, try again"; return; }
+      enter(data.user);
+      connect(); // reconnect so the stream carries our identity for presence
+      toast(`Welcome, ${data.user.emoji} ${data.user.name}!`);
+    } catch {
+      el.joinErr.textContent = "Couldn't reach the server — try again";
+    } finally {
+      el.joinBtn.disabled = false;
+    }
+  };
+
+  function enter(user) {
+    me = user;
+    el.modal.classList.add("hidden");
+    el.meEmoji.textContent = user.emoji;
+    el.draft.disabled = false;
+    el.send.disabled = false;
+    el.draft.focus();
+    for (const m of el.thread.querySelectorAll(".msg")) m.classList.toggle("mine", m.dataset.name === me.name && m.dataset.emoji === me.emoji);
+  }
+
+  // ------------------------------------------------------------ stream
+  let es = null;
+  function connect() {
+    es?.close();
+    es = new EventSource("/api/stream");
+    es.addEventListener("history", (ev) => {
+      const d = JSON.parse(ev.data);
+      el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
+      for (const m of d.messages) addMessage(m, false);
+      scrollDown(true);
+      renderFame(d.fame);
+      renderPresence(d.presence);
+      renderStats(d.stats);
+    });
+    es.addEventListener("message", (ev) => {
+      const d = JSON.parse(ev.data);
+      addMessage(d.message, true);
+      renderFame(d.fame);
+    });
+    es.addEventListener("presence", (ev) => renderPresence(JSON.parse(ev.data)));
+    es.onerror = () => { el.online.textContent = "…"; };
+  }
+
+  function nearBottom() {
+    return el.thread.scrollHeight - el.thread.scrollTop - el.thread.clientHeight < 120;
+  }
+  function scrollDown(force) {
+    if (force || nearBottom()) el.thread.scrollTop = el.thread.scrollHeight;
+  }
+
+  function addMessage(m, live) {
+    el.hello.style.display = "none";
+    const stick = nearBottom();
+    const node = document.createElement("article");
+    node.className = "msg" + (me && m.name === me.name && m.emoji === me.emoji ? " mine" : "");
+    node.dataset.name = m.name;
+    node.dataset.emoji = m.emoji;
+    node.innerHTML = `
+      <div class="avatar"></div>
+      <div class="bubble">
+        <div class="meta"><span class="name"></span><span class="time">${fmtTime(m.ts)}</span><span class="nice-badge"></span></div>
+        <p class="text"></p>
+        <div class="probs"></div>
+      </div>`;
+    node.querySelector(".avatar").textContent = m.emoji;
+    node.querySelector(".name").textContent = m.name;
+    node.querySelector(".text").textContent = m.text;
+    node.querySelector(".nice-badge").textContent = m.niceness != null ? `${FACES[Math.max(0, Math.min(4, Math.round(m.niceness) - 1))]} ${m.niceness.toFixed(1)} · ${m.tone}` : "";
+    renderProbs(node.querySelector(".probs"), { flags: m.scores?.flags, tone: m.tone, tone_probs: m.scores?.tone_probs, niceness: m.niceness, niceness_probs: m.scores?.niceness_probs, hits: [] });
+    if (m.scores?.latency_ms != null) node.querySelector(".probs").append(groupRow(`jev latency ${m.scores.latency_ms} ms`));
+    el.thread.append(node);
+    while (el.thread.querySelectorAll(".msg").length > 300) el.thread.querySelector(".msg").remove();
+    if (live ? stick : true) scrollDown(true);
+  }
+
+  function renderFame(list) {
+    el.fame.replaceChildren(
+      ...(list || []).map((m) => {
+        const li = document.createElement("li");
+        li.innerHTML = `<span class="who"></span> <span class="what"></span> <span class="score"></span>`;
+        li.querySelector(".who").textContent = `${m.emoji} ${m.name}:`;
+        li.querySelector(".what").textContent = m.text.length > 70 ? m.text.slice(0, 70) + "…" : m.text;
+        li.querySelector(".score").textContent = `(${m.niceness.toFixed(1)} 🥰)`;
+        return li;
+      })
+    );
+  }
+
+  function renderPresence(p) {
+    el.online.textContent = p.online;
+    el.faces.textContent = p.people.slice(0, 12).map((x) => x.emoji).join("");
+    el.faces.title = p.people.map((x) => `${x.emoji} ${x.name}`).join(", ");
+  }
+
+  function renderStats(s) {
+    if (!s) return;
+    el.sReq.textContent = s.requests;
+    el.sBlocked.textContent = s.blocked;
+    el.sLat.textContent = s.requests ? `${Math.round(s.total_latency_ms / s.requests)} ms` : "–";
+    if (s.model) el.sModel.textContent = s.model;
+  }
+
+  // ------------------------------------------------------------ typing → judge
+  function setVerdict(v, { thinking = false } = {}) {
+    el.verdict.classList.toggle("thinking", thinking);
+    el.send.classList.remove("blocked", "pending");
+    el.reasons.replaceChildren();
+    if (thinking) {
+      el.face.textContent = "🤔";
+      el.vtext.textContent = "Jev is reading…";
+      el.send.classList.add("pending");
+      el.sendLabel.textContent = "Send";
+      return;
+    }
+    if (!v || v.skipped) {
+      el.face.textContent = "😶";
+      el.meter.style.width = "0%";
+      el.vtext.textContent = v?.skipped ? "Keep going — Jev scores drafts of 3+ words as you type." : "Jev checks every message for niceness before it lands.";
+      el.sendLabel.textContent = "Send";
+      el.sendEmoji.textContent = "💌";
+      return;
+    }
+    if (v.error) {
+      el.face.textContent = "😵";
+      el.vtext.textContent = v.error;
+      return;
+    }
+    const n = v.niceness ?? 3;
+    el.face.textContent = FACES[Math.max(0, Math.min(4, Math.round(n) - 1))];
+    el.meter.style.width = `${Math.round(((n - 1) / 4) * 100)}%`;
+    if (v.allowed) {
+      el.vtext.textContent = n >= 4.5 ? "Delightful! Send it!" : n >= 3.5 ? "Nice — that'll land well." : "Fine by Jev. Could be warmer, but it passes.";
+      el.sendLabel.textContent = "Send";
+      el.sendEmoji.textContent = n >= 4.5 ? "🥰" : "💌";
+    } else {
+      el.vtext.textContent = v.meanness >= 0.8 ? "Yikes. That's not going through." : "Hmm, Jev isn't feeling that one.";
+      el.send.classList.add("blocked");
+      el.sendLabel.textContent = "Nope";
+      el.sendEmoji.textContent = "🙈";
+      el.reasons.replaceChildren(...(v.reasons || []).map((r) => { const c = document.createElement("span"); c.className = "chip"; c.textContent = r; return c; }));
+    }
+  }
+
+  function renderLive(v) {
+    if (!v || v.skipped || !v.flags) {
+      el.liveProbs.replaceChildren();
+      el.liveMeta.textContent = "";
+      el.liveHint.style.display = "";
+      return;
+    }
+    el.liveHint.style.display = "none";
+    renderProbs(el.liveProbs, v);
+    el.liveMeta.textContent = `${v.allowed ? "ALLOW" : "BLOCK"} · ${v.latency_ms} ms${v.cached ? " · cached" : ""}${v.hits?.length ? " · hits: " + v.hits.join(", ") : ""}`;
+  }
+
+  async function judgeDraft() {
+    const text = el.draft.value;
+    seq++;
+    judgeCtl?.abort();
+    if (words(text) < 3) { latest = null; setVerdict(text.trim() ? { skipped: true } : null); renderLive(null); return; }
+    const mySeq = seq;
+    judgeCtl = new AbortController();
+    setVerdict(null, { thinking: true });
+    try {
+      const { status, data } = await api("/api/judge", { draft: text }, judgeCtl.signal);
+      if (mySeq !== seq) return;
+      if (status === 429) { setVerdict({ error: data.error }); return; }
+      if (status === 503) { setVerdict({ error: data.error }); return; }
+      if (status === 401) { el.modal.classList.remove("hidden"); return; }
+      latest = { ...data, text: text.trim() };
+      setVerdict(data);
+      renderLive(data);
+      renderStats(data.stats);
+    } catch (e) {
+      if (e.name !== "AbortError" && mySeq === seq) setVerdict({ error: "Couldn't reach Jev" });
+    }
+  }
+
+  el.draft.addEventListener("input", () => {
+    el.draft.style.height = "auto";
+    el.draft.style.height = Math.min(el.draft.scrollHeight, 180) + "px";
+    clearTimeout(judgeTimer);
+    judgeTimer = setTimeout(judgeDraft, 380);
+  });
+  el.draft.addEventListener("keydown", (e) => {
+    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.composer.requestSubmit(); }
+  });
+
+  // ------------------------------------------------------------ wiggle
+  // meanness 0..1 → amplitude 4–30px, rotation 1–12°, duration 0.45–1.1s (+ full-screen quake when it's really mean)
+  function wiggle(meanness = 0.3) {
+    const m = Math.max(0, Math.min(1, meanness));
+    el.send.style.setProperty("--amp", `${(4 + m * 26).toFixed(1)}px`);
+    el.send.style.setProperty("--rot", `${(1 + m * 11).toFixed(1)}deg`);
+    el.send.style.setProperty("--wiggle-dur", `${(0.45 + m * 0.65).toFixed(2)}s`);
+    el.send.classList.remove("wiggle");
+    void el.send.offsetWidth; // restart animation
+    el.send.classList.add("wiggle");
+    if (m >= 0.85) {
+      document.body.classList.remove("quake");
+      void document.body.offsetWidth;
+      document.body.classList.add("quake");
+      setTimeout(() => document.body.classList.remove("quake"), 600);
+    }
+    if (navigator.vibrate) navigator.vibrate(m >= 0.85 ? [80, 40, 120] : 40);
+  }
+
+  // ------------------------------------------------------------ send
+  el.composer.onsubmit = async (e) => {
+    e.preventDefault();
+    if (sending || !me) return;
+    const text = el.draft.value.trim();
+    if (!text) { wiggle(0); return; }
+    if (latest && !latest.allowed && latest.text === text) { wiggle(latest.meanness); toast("Try saying it kindly 💕"); return; }
+    sending = true;
+    clearTimeout(judgeTimer);
+    judgeCtl?.abort();
+    seq++;
+    setVerdict(null, { thinking: true });
+    el.send.disabled = true;
+    try {
+      const { status, data } = await api("/api/send", { text });
+      if (status === 401) { el.modal.classList.remove("hidden"); return; }
+      if (status === 403 && data.blocked) {
+        latest = { ...data, text };
+        setVerdict(data);
+        renderLive(data);
+        renderStats(data.stats);
+        wiggle(data.meanness);
+        return;
+      }
+      if (!data.ok) { setVerdict({ error: data.error || "Something went sideways" }); wiggle(0.15); return; }
+      el.draft.value = "";
+      el.draft.style.height = "auto";
+      latest = null;
+      setVerdict(null);
+      renderLive(data);
+      renderStats(data.stats);
+      scrollDown(true);
+    } catch {
+      setVerdict({ error: "Couldn't reach the server" });
+      wiggle(0.15);
+    } finally {
+      sending = false;
+      el.send.disabled = false;
+      el.draft.focus();
+    }
+  };
+
+  // ------------------------------------------------------------ debugger
+  const params = new URLSearchParams(location.search);
+  const debugOn = params.get("debug") === "1" || (params.get("debug") !== "0" && localStorage.getItem("nc_debug") === "1");
+  function setDebug(on) {
+    document.body.classList.toggle("debug", on);
+    el.debug.checked = on;
+    localStorage.setItem("nc_debug", on ? "1" : "0");
+    document.title = on ? "[jev] nice-chat :: debugger" : "Nice Chat 💖 — the chat where only nice things get through";
+  }
+  el.debug.onchange = () => setDebug(el.debug.checked);
+  setDebug(debugOn);
+  document.addEventListener("keydown", (e) => {
+    if (e.key === "`" && e.ctrlKey) setDebug(!document.body.classList.contains("debug"));
+  });
+
+  // ------------------------------------------------------------ boot
+  (async () => {
+    connect();
+    const { ok, data } = await api("/api/me");
+    if (ok && data.user) enter(data.user);
+    else el.modal.classList.remove("hidden");
+  })();
+})();

@@ -1,1 +1,92 @@
-# nice-chat
+# 💖 Nice Chat
+
+[![Built by Devin](https://raw.githubusercontent.com/club-cog/built-by-devin/main/badges/built-by-devin.svg)](https://builtbydevin.ai/)
+
+One big chat room. Everyone in the world. **Only nice messages get through.**
+
+Every draft is scored by [Jev](https://docs.typesafe.ai) while you type, and again on the
+server when you hit send. Mean messages never land — the Send button just wiggles
+(harder the meaner you were) and tells you why.
+
+Built by Devin — https://builtbydevin.ai/
+
+## Features
+
+- **Comic Sans + pastels.** Big friendly type, floaty pastel blobs, bouncy buttons.
+- **Live niceness meter.** Jev reads your draft as you type; the face and meter react.
+- **Scaled wiggle.** A blocked send shakes the button; amplitude, rotation and duration
+  scale with Jev's `meanness` score. Truly hostile messages shake the whole page.
+- **🐛 Debugger mode.** Flip the switch for hacker colors (black background, green
+  monospace) and see every probability Jev returned — for your live draft *and* for
+  every message in the room.
+- **One massive room.** Server-Sent Events fan messages out to everyone connected,
+  with presence, a "nicest things said" leaderboard, and live Jev stats.
+- **Username + emoji.** Pick a name and an emoji to join. A cookie remembers you on
+  that computer, so refreshing or coming back later drops you straight into the room.
+
+## How moderation works
+
+Jev is not a text-generating LLM — it returns calibrated probabilities that code can
+branch on. Each check is **one request with eight atomic questions** about the draft
+(plus the last few room messages for context):
+
+| id | type | question |
+| --- | --- | --- |
+| `is_kind` | Noul | Is it kind or friendly? |
+| `is_insult` | Noul | Does it insult or demean someone? |
+| `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
+| `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |
+| `is_profane_or_slur` | Noul | Profanity or slurs? |
+| `is_harassment_or_threat` | Noul | Harassing or threatening? |
+| `tone` | Choice | warm / neutral / cold / hostile |
+| `niceness` | Score | 1 (mean) … 5 (lovely) |
+
+Plain code in [`jev.js`](jev.js) owns the thresholds and the final decision, and derives a
+0–1 `meanness` score that drives the wiggle. The browser calls `/api/judge` for the live
+preview, but `/api/send` always re-judges on the server, so nothing sneaks past.
+
+## Run it
+
+Requires Node 20+. No dependencies.
+
+```bash
+export TYPESAFE_API_KEY=...   # get one at https://console.typesafe.ai
+npm start                     # http://localhost:3000
+```
+
+Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
+`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`, `TRUST_PROXY` (set to `0` when not behind a reverse proxy).
+
+```bash
+npm run check   # syntax-check every file
+npm test        # decision-logic tests (no network)
+```
+
+### Docker
+
+```bash
+docker build -t nice-chat .
+docker run -p 3000:3000 -e TYPESAFE_API_KEY=... -v nice-chat-data:/data nice-chat
+```
+
+## Architecture
+
+```
+public/            static frontend (index.html, style.css, app.js) — no build step
+server.js          zero-dependency HTTP server: static files, cookies, SSE, rate limits
+jev.js             Jev questions, thresholds, decide(), cache, retries, stats
+store.js           bounded JSON persistence (users + last N messages, atomic writes)
+test/              node:test suite for decide()
+```
+
+Endpoints: `GET /api/me`, `POST /api/join`, `GET /api/stream` (SSE), `POST /api/judge`,
+`POST /api/send`, `GET /api/stats`, `GET /healthz`.
+
+Public-room safeguards: 400-char messages, per-user token buckets for typing checks /
+sends / joins, a cap on in-flight Jev calls, bounded history, and an exact-state Jev
+cache. Messages live in memory and are flushed to `data/state.json`; for multiple
+server instances put a sticky load balancer in front or swap `store.js` for a shared store.
+
+---
+
+Made with 💖 by Devin · https://builtbydevin.ai/

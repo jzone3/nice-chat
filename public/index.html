@@ -1,0 +1,121 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Nice Chat 💖 — the chat where only nice things get through</title>
+  <meta name="description" content="One big chat room where every message is checked for niceness before it lands. Be kind, or wiggle." />
+  <meta property="og:title" content="Nice Chat 💖" />
+  <meta property="og:description" content="One big chat room where only nice messages get through. Powered by Jev." />
+  <link rel="icon" href="favicon.svg" type="image/svg+xml" />
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
+  <link rel="stylesheet" href="style.css?v=5" />
+</head>
+<body>
+  <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
+
+  <header class="top">
+    <a class="brand" href="/">
+      <span class="brand-heart">💖</span>
+      <span class="brand-name">Nice Chat</span>
+      <span class="brand-tag">only nice things get through</span>
+    </a>
+    <div class="top-right">
+      <div class="presence" id="presence" title="People online right now">
+        <span class="dot"></span><span id="online-count">…</span> online
+        <span class="faces" id="faces"></span>
+      </div>
+      <label class="debug-toggle" title="Hacker mode: see Jev's probabilities">
+        <input type="checkbox" id="debug-toggle" />
+        <span class="switch"></span>
+        <span class="debug-label">🐛 debugger</span>
+      </label>
+    </div>
+  </header>
+
+  <main class="layout">
+    <section class="chat card">
+      <div class="thread" id="thread" aria-live="polite">
+        <div class="thread-hello" id="thread-hello">
+          <div class="big">👋</div>
+          <p>Welcome to the one big room. Say something kind and it shows up for everyone. Say something mean and… the button will let you know.</p>
+        </div>
+      </div>
+
+      <form class="composer" id="composer" autocomplete="off">
+        <div class="compose-row">
+          <span class="me-emoji" id="me-emoji">🙂</span>
+          <textarea id="draft" rows="1" maxlength="400" placeholder="Type something nice…" disabled></textarea>
+          <button type="submit" id="send" class="send" disabled>
+            <span class="send-label">Send</span> <span class="send-emoji">💌</span>
+          </button>
+        </div>
+        <div class="verdict" id="verdict">
+          <span class="verdict-face" id="verdict-face">😶</span>
+          <div class="meter" title="Niceness"><div class="meter-fill" id="meter-fill" style="width:0%"></div></div>
+          <span class="verdict-text" id="verdict-text">Jev checks every message for niceness before it lands.</span>
+        </div>
+        <div class="reasons" id="reasons"></div>
+      </form>
+    </section>
+
+    <aside class="rail">
+      <section class="card live" id="live">
+        <h2>🔬 Live Jev read</h2>
+        <p class="hint" id="live-hint">Start typing and Jev scores your draft as you go.</p>
+        <div class="probs" id="live-probs"></div>
+        <div class="live-meta" id="live-meta"></div>
+      </section>
+
+      <section class="card fame">
+        <h2>🏆 Nicest things said</h2>
+        <ol id="fame"></ol>
+      </section>
+
+      <section class="card stats">
+        <h2>📈 Jev stats</h2>
+        <dl id="stats">
+          <div><dt>checks</dt><dd id="s-requests">0</dd></div>
+          <div><dt>blocked</dt><dd id="s-blocked">0</dd></div>
+          <div><dt>avg latency</dt><dd id="s-latency">–</dd></div>
+          <div><dt>model</dt><dd id="s-model">jev-latest</dd></div>
+        </dl>
+        <p class="how">Every message is checked by <strong>Jev</strong>: eight atomic questions (insult? sarcasm? passive-aggressive? …) answered as calibrated probabilities, then plain code decides. The server re-checks on send, so no sneaking past.</p>
+      </section>
+    </aside>
+  </main>
+
+  <footer class="foot">
+    <a class="bbd" href="https://builtbydevin.ai/" target="_blank" rel="noopener">
+      <img src="https://raw.githubusercontent.com/club-cog/built-by-devin/main/badges/built-by-devin.svg" alt="Built by Devin" height="28" />
+    </a>
+    <span>·</span>
+    <a href="https://builtbydevin.ai/" target="_blank" rel="noopener">builtbydevin.ai</a>
+    <span>·</span>
+    <a href="https://github.com/jzone3/nice-chat" target="_blank" rel="noopener">source</a>
+  </footer>
+
+  <div class="modal" id="join-modal">
+    <form class="join card" id="join-form">
+      <h1>💖 Nice Chat</h1>
+      <p class="join-sub">One big room. Everyone in the world. Only nice messages get through.</p>
+      <label class="field">
+        <span>What should we call you?</span>
+        <input id="join-name" maxlength="20" placeholder="e.g. sunny sam" required autofocus />
+      </label>
+      <div class="field">
+        <span>Pick your emoji <button type="button" class="shuffle" id="shuffle">🎲 surprise me</button></span>
+        <div class="emoji-grid" id="emoji-grid" role="radiogroup"></div>
+      </div>
+      <div class="join-preview" id="join-preview"><span class="pv-emoji">🙂</span> <span class="pv-name">you</span></div>
+      <button type="submit" class="join-btn" id="join-btn">Join the chat 🎉</button>
+      <p class="join-err" id="join-err"></p>
+      <p class="join-fine">We drop a cookie so this computer remembers you. That's all it does.</p>
+    </form>
+  </div>
+
+  <div class="toast" id="toast"></div>
+  <script src="app.js?v=5"></script>
+</body>
+</html>
