@@ -193,7 +193,7 @@ function memoryStore() {
       for (const { max, windowMs } of LIMITS[kind]) {
         const k = `${kind}:${key}:${windowMs}`;
         let h = hits.get(k);
-        if (!h || h.reset <= now) hits.set(k, (h = { n: 0, reset: now + windowMs }));
+        if (!h || h.reset <= now) hits.set(k, (h = { n: 0, reset: (Math.floor(now / windowMs) + 1) * windowMs }));
         if (++h.n > max) ok = false;
       }
       return ok;
