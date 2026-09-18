@@ -37,6 +37,12 @@
   // ------------------------------------------------------------ utils
   const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const pct = (p) => `${Math.round((p ?? 0) * 100)}%`;
+  const TINTS = 5;
+  const tintOf = (key) => {
+    let h = 5381;
+    for (const ch of key) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+    return h % TINTS;
+  };
   const words = (s) => s.trim().split(/\s+/).filter(Boolean).length;
 
   function toast(msg, ms = 2200) {
@@ -237,6 +243,7 @@
     node.dataset.ts = m.ts;
     node.dataset.name = m.name;
     node.dataset.emoji = m.emoji;
+    node.dataset.tint = tintOf(`${m.name}\u0000${m.emoji}`);
     node.innerHTML = `
       <div class="avatar"></div>
       <div class="bubble">

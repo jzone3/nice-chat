@@ -6,7 +6,7 @@ const path = require("path");
 process.env.DATA_FILE = path.join(os.tmpdir(), `nice-chat-test-${process.pid}.json`);
 delete process.env.REDIS_URL;
 delete process.env.KV_URL;
-process.env.JEV_BUDGET_30M = "3";
+process.env.JEV_BUDGET_DAY = "3";
 const store = require("../store");
 
 const uid = "00000000-0000-4000-8000-000000000001";

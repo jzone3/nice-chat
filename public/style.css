@@ -106,15 +106,17 @@ h2 { font-size: 1.05rem; }
 
 .msg { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.6rem; align-items: start; animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
 @keyframes pop { from { transform: scale(0.85) translateY(10px); opacity: 0; } }
+/* --tint is chosen per author (hash of name+emoji) so one person always gets one color */
+.msg { --tint: var(--pink); }
+.msg[data-tint="1"] { --tint: var(--mint); }
+.msg[data-tint="2"] { --tint: var(--lilac); }
+.msg[data-tint="3"] { --tint: var(--sky); }
+.msg[data-tint="4"] { --tint: var(--peach); }
 .msg .avatar {
   width: 2.7rem; height: 2.7rem; display: grid; place-items: center; font-size: 1.6rem;
-  background: var(--lemon); border: 2px solid var(--line); border-radius: 50%;
+  background: var(--tint); border: 2px solid var(--line); border-radius: 50%;
 }
-.msg:nth-child(3n) .avatar { background: var(--sky); }
-.msg:nth-child(3n + 1) .avatar { background: var(--peach); }
-.msg .bubble { background: var(--pink); border: 2px solid var(--line); border-radius: 4px 20px 20px 20px; padding: 0.55rem 0.9rem; position: relative; }
-.msg:nth-child(3n) .bubble { background: var(--lilac); }
-.msg:nth-child(3n + 1) .bubble { background: var(--mint); }
+.msg .bubble { background: var(--tint); border: 2px solid var(--line); border-radius: 4px 20px 20px 20px; padding: 0.55rem 0.9rem; position: relative; }
 .msg.mine .bubble { background: var(--lemon); }
 .msg .meta { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.85rem; }
 .msg .name { font-weight: 700; }

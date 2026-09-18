@@ -20,7 +20,8 @@ const REACTION_TTL_S = 60 * 60 * 24 * 30;
 // a sustained one. `*_ip` kinds are keyed by client IP so clearing cookies doesn't reset them;
 // `jev` is keyed by a single constant and caps the room's total upstream Jev calls.
 const MIN = 60_000;
-const JEV_BUDGET_30M = Number(process.env.JEV_BUDGET_30M) || 3000;
+const DAY = 24 * 60 * MIN; // fixed UTC-day buckets
+const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 100_000;
 const LIMITS = {
   judge: [{ max: 8, windowMs: 5_000 }, { max: 150, windowMs: 10 * MIN }], // as-you-type checks
   judge_ip: [{ max: 300, windowMs: 10 * MIN }],
@@ -28,7 +29,7 @@ const LIMITS = {
   send_ip: [{ max: 60, windowMs: 10 * MIN }],
   join: [{ max: 10, windowMs: MIN }, { max: 30, windowMs: 60 * MIN }],
   react: [{ max: 30, windowMs: 10_000 }, { max: 300, windowMs: 10 * MIN }],
-  jev: [{ max: JEV_BUDGET_30M, windowMs: 30 * MIN }],
+  jev: [{ max: JEV_BUDGET_DAY, windowMs: DAY }],
 };
 
 const pub = (u) => (u ? { name: u.name, emoji: u.emoji } : null);

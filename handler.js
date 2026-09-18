@@ -310,7 +310,7 @@ async function handle(req, res) {
     res.end("not found");
   } catch (e) {
     if (e.busy) return send(res, 503, { error: "Jev is swamped, try again in a moment", busy: true });
-    if (e.cooldown) return send(res, 503, { error: "The room is cooling down — Jev is out of calls for a bit. Try again in a few minutes.", cooldown: true });
+    if (e.cooldown) return send(res, 503, { error: "The room hit today's Jev budget — back tomorrow!", cooldown: true });
     if (e.badRequest) return send(res, 400, { error: "Bad JSON" });
     console.error(`[${req.method} ${url.pathname}]`, e.message);
     if (!res.headersSent) send(res, 502, { error: String(e.message || e) });
