@@ -20,6 +20,9 @@ const MIME = {
 const COOKIE = "nc_uid";
 const MAX_TEXT = 400;
 const MAX_JEV_INFLIGHT = Number(process.env.MAX_JEV_INFLIGHT) || 48;
+// Behind a reverse proxy (most hosts), X-Forwarded-* is the only source of client IP/proto.
+// Set TRUST_PROXY=0 when exposing the Node process directly so clients cannot spoof them.
+const TRUST_PROXY = process.env.TRUST_PROXY !== "0";
 
 // ------------------------------------------------------------------ helpers
 function readJson(req) {
@@ -33,6 +36,7 @@ function readJson(req) {
       try {
         resolve(JSON.parse(body || "{}"));
       } catch (e) {
+        e.badRequest = true;
         reject(e);
       }
     });
@@ -55,7 +59,7 @@ function parseCookies(req) {
 }
 
 function isSecure(req) {
-  return req.headers["x-forwarded-proto"] === "https" || req.socket.encrypted;
+  return (TRUST_PROXY && req.headers["x-forwarded-proto"] === "https") || req.socket.encrypted;
 }
 
 function setUidCookie(req, uid) {
@@ -74,7 +78,7 @@ function cleanProfile(body) {
 }
 
 function clientIp(req) {
-  const fwd = req.headers["x-forwarded-for"];
+  const fwd = TRUST_PROXY ? req.headers["x-forwarded-for"] : undefined;
   return (typeof fwd === "string" && fwd.split(",")[0].trim()) || req.socket.remoteAddress || "?";
 }
 
@@ -125,9 +129,18 @@ async function gatedJudge(...args) {
 
 // ---------------------------------------------------------------- realtime
 const clients = new Set(); // { res, uid }
+const MAX_SSE_BUFFER = 256 * 1024; // drop clients that stop reading
+function push(c, payload) {
+  if (c.res.destroyed || c.res.writableLength > MAX_SSE_BUFFER) {
+    clients.delete(c);
+    c.res.destroy();
+    return;
+  }
+  c.res.write(payload);
+}
 function broadcast(event, data) {
   const payload = `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`;
-  for (const c of clients) c.res.write(payload);
+  for (const c of clients) push(c, payload);
 }
 
 function presence() {
@@ -150,7 +163,7 @@ function schedulePresence() {
 }
 
 setInterval(() => {
-  for (const c of clients) c.res.write(": ping\n\n");
+  for (const c of clients) push(c, ": ping\n\n");
 }, 25_000).unref();
 
 function publicUser(u) {
@@ -169,9 +182,9 @@ const server = http.createServer(async (req, res) => {
 
     if (req.method === "GET" && !url.pathname.startsWith("/api/")) {
       const file = url.pathname === "/" ? "index.html" : decodeURIComponent(url.pathname.slice(1));
-      const p = path.normalize(path.join(PUBLIC, file));
+      const p = path.resolve(PUBLIC, file);
       const ext = path.extname(p);
-      if (!p.startsWith(PUBLIC) || !MIME[ext] || !fs.existsSync(p)) {
+      if (!p.startsWith(PUBLIC + path.sep) || !MIME[ext] || !fs.existsSync(p)) {
         res.writeHead(404, { "Content-Type": "text/plain" });
         return res.end("not found");
       }
@@ -251,6 +264,7 @@ const server = http.createServer(async (req, res) => {
     res.end("not found");
   } catch (e) {
     if (e.busy) return send(res, 503, { error: "Jev is swamped, try again in a moment", busy: true });
+    if (e.badRequest) return send(res, 400, { error: "Bad JSON" });
     console.error(`[${req.method} ${url.pathname}]`, e.message);
     if (!res.headersSent) send(res, 502, { error: String(e.message || e) });
   }

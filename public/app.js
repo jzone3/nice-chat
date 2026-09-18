@@ -118,12 +118,17 @@
     e.preventDefault();
     el.joinErr.textContent = "";
     el.joinBtn.disabled = true;
-    const { ok, data } = await api("/api/join", { name: el.joinName.value, emoji: pickedEmoji });
-    el.joinBtn.disabled = false;
-    if (!ok) { el.joinErr.textContent = data.error || "Hmm, try again"; return; }
-    enter(data.user);
-    connect(); // reconnect so the stream carries our identity for presence
-    toast(`Welcome, ${data.user.emoji} ${data.user.name}!`);
+    try {
+      const { ok, data } = await api("/api/join", { name: el.joinName.value, emoji: pickedEmoji });
+      if (!ok) { el.joinErr.textContent = data.error || "Hmm, try again"; return; }
+      enter(data.user);
+      connect(); // reconnect so the stream carries our identity for presence
+      toast(`Welcome, ${data.user.emoji} ${data.user.name}!`);
+    } catch {
+      el.joinErr.textContent = "Couldn't reach the server — try again";
+    } finally {
+      el.joinBtn.disabled = false;
+    }
   };
 
   function enter(user) {
@@ -273,9 +278,10 @@
 
   async function judgeDraft() {
     const text = el.draft.value;
-    if (words(text) < 3) { latest = null; setVerdict({ skipped: text.trim().length > 0 }); renderLive(null); return; }
-    const mySeq = ++seq;
+    seq++;
     judgeCtl?.abort();
+    if (words(text) < 3) { latest = null; setVerdict({ skipped: text.trim().length > 0 }); renderLive(null); return; }
+    const mySeq = seq;
     judgeCtl = new AbortController();
     setVerdict(null, { thinking: true });
     try {

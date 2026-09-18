@@ -55,7 +55,7 @@ npm start                     # http://localhost:3000
 ```
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
-`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`.
+`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`, `TRUST_PROXY` (set to `0` when not behind a reverse proxy).
 
 ```bash
 npm run check   # syntax-check every file
