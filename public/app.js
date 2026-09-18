@@ -141,20 +141,29 @@
     for (const m of el.thread.querySelectorAll(".msg")) m.classList.toggle("mine", m.dataset.name === me.name && m.dataset.emoji === me.emoji);
   }
 
-  // ------------------------------------------------------------ stream
+  // ------------------------------------------------------------ realtime
+  // Two transports, chosen by the server (/api/me): "sse" (one process pushes) or "poll" (serverless; we ask every few seconds).
+  let transport = "sse";
+  let pollMs = 2500;
   let es = null;
+  let pollTimer = null;
+  let pollCursor = 0; // ts of the newest message we've rendered
+  let polling = false;
+
+  function applyHistory(d) {
+    el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
+    for (const m of d.messages) addMessage(m, false);
+    scrollDown(true);
+    renderFame(d.fame);
+    renderPresence(d.presence);
+    renderStats(d.stats);
+  }
+
   function connect() {
+    if (transport === "poll") return startPolling(true);
     es?.close();
     es = new EventSource("/api/stream");
-    es.addEventListener("history", (ev) => {
-      const d = JSON.parse(ev.data);
-      el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
-      for (const m of d.messages) addMessage(m, false);
-      scrollDown(true);
-      renderFame(d.fame);
-      renderPresence(d.presence);
-      renderStats(d.stats);
-    });
+    es.addEventListener("history", (ev) => applyHistory(JSON.parse(ev.data)));
     es.addEventListener("message", (ev) => {
       const d = JSON.parse(ev.data);
       addMessage(d.message, true);
@@ -164,6 +173,36 @@
     es.onerror = () => { el.online.textContent = "…"; };
   }
 
+  async function poll(full = false) {
+    if (polling) return;
+    polling = true;
+    try {
+      const { ok, data } = await api(full ? "/api/poll" : `/api/poll?since=${pollCursor}`);
+      if (!ok) { el.online.textContent = "…"; return; }
+      if (data.full) applyHistory(data);
+      else {
+        for (const m of data.messages) addMessage(m, true);
+        renderFame(data.fame);
+        renderPresence(data.presence);
+        renderStats(data.stats);
+      }
+      for (const m of data.messages) pollCursor = Math.max(pollCursor, m.ts);
+    } catch {
+      el.online.textContent = "…";
+    } finally {
+      polling = false;
+    }
+  }
+
+  function startPolling(full) {
+    clearInterval(pollTimer);
+    poll(full);
+    pollTimer = setInterval(() => { if (document.visibilityState !== "hidden") poll(); }, pollMs);
+  }
+  document.addEventListener("visibilitychange", () => {
+    if (transport === "poll" && document.visibilityState === "visible") poll();
+  });
+
   function nearBottom() {
     return el.thread.scrollHeight - el.thread.scrollTop - el.thread.clientHeight < 120;
   }
@@ -172,10 +211,12 @@
   }
 
   function addMessage(m, live) {
+    if (m.id && el.thread.querySelector(`.msg[data-id="${m.id}"]`)) return;
     el.hello.style.display = "none";
     const stick = nearBottom();
     const node = document.createElement("article");
     node.className = "msg" + (me && m.name === me.name && m.emoji === me.emoji ? " mine" : "");
+    node.dataset.id = m.id || "";
     node.dataset.name = m.name;
     node.dataset.emoji = m.emoji;
     node.innerHTML = `
@@ -359,6 +400,7 @@
       setVerdict(null);
       renderLive(data);
       renderStats(data.stats);
+      if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame); pollCursor = Math.max(pollCursor, data.message.ts); }
       scrollDown(true);
     } catch {
       setVerdict({ error: "Couldn't reach the server" });
@@ -387,9 +429,11 @@
 
   // ------------------------------------------------------------ boot
   (async () => {
+    let data = {};
+    try { ({ data } = await api("/api/me")); } catch {}
+    if (data.transport === "poll") { transport = "poll"; pollMs = data.poll_ms || pollMs; }
     connect();
-    const { ok, data } = await api("/api/me");
-    if (ok && data.user) enter(data.user);
+    if (data.user) enter(data.user);
     else el.modal.classList.remove("hidden");
   })();
 })();

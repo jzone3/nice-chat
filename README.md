@@ -55,7 +55,8 @@ npm start                     # http://localhost:3000
 ```
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
-`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`, `TRUST_PROXY` (set to `0` when not behind a reverse proxy).
+`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`, `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
+`REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
 
 ```bash
 npm run check   # syntax-check every file
@@ -69,23 +70,43 @@ docker build -t nice-chat .
 docker run -p 3000:3000 -e TYPESAFE_API_KEY=... -v nice-chat-data:/data nice-chat
 ```
 
+### Vercel
+
+The app runs as a single serverless function (`api/index.js`) plus static files. Because
+instances come and go, the room needs a shared Redis and browsers poll instead of
+holding an SSE stream (both switch on automatically when `VERCEL` is set).
+
+```bash
+vercel link
+vercel integration add upstash          # Upstash for Redis → sets REDIS_URL on the project
+vercel env add TYPESAFE_API_KEY production --sensitive
+vercel deploy --prod
+```
+
+Without `REDIS_URL` the function falls back to in-memory state, which is fine for a demo
+but resets on cold starts and isn't shared between instances.
+
 ## Architecture
 
 ```
 public/            static frontend (index.html, style.css, app.js) — no build step
-server.js          zero-dependency HTTP server: static files, cookies, SSE, rate limits
+handler.js         the request handler: static files, cookies, routes, rate limits, SSE or poll
+server.js          long-running Node entry (local / Docker): http.createServer(handle)
+api/index.js       Vercel function entry (all /api/* and /healthz are rewritten here)
 jev.js             Jev questions, thresholds, decide(), cache, retries, stats
-store.js           bounded JSON persistence (users + last N messages, atomic writes)
-test/              node:test suite for decide()
+store.js           async room store: memory+JSON file, or Redis when REDIS_URL is set
+redis.js           ~150-line zero-dependency RESP client (redis:// and rediss://, pipelining)
+test/              node:test suite for decide(), the RESP parser and the store
 ```
 
-Endpoints: `GET /api/me`, `POST /api/join`, `GET /api/stream` (SSE), `POST /api/judge`,
-`POST /api/send`, `GET /api/stats`, `GET /healthz`.
+Endpoints: `GET /api/me` (also tells the browser which transport to use), `POST /api/join`,
+`GET /api/stream` (SSE, long-running mode), `GET /api/poll?since=<ts>` (serverless mode;
+doubles as presence heartbeat), `POST /api/judge`, `POST /api/send`, `GET /api/stats`, `GET /healthz`.
 
-Public-room safeguards: 400-char messages, per-user token buckets for typing checks /
-sends / joins, a cap on in-flight Jev calls, bounded history, and an exact-state Jev
-cache. Messages live in memory and are flushed to `data/state.json`; for multiple
-server instances put a sticky load balancer in front or swap `store.js` for a shared store.
+Public-room safeguards: 400-char messages, per-user fixed-window rate limits for typing
+checks / sends / joins, a cap on in-flight Jev calls per instance, bounded history, and an
+exact-state Jev cache. With Redis, users, messages, hall of fame, presence, rate limits and
+Jev stats are all shared, so any number of instances serve the same room.
 
 ---
 
