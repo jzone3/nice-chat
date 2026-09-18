@@ -1,6 +1,6 @@
 // Live moderation checks against real Jev: swear words, slurs and words that get used as
 // put-downs must be blocked; sincere uses of the same identity terms must get through.
-// Needs TYPESAFE_API_KEY; skipped otherwise. Run: npm run test:live
+// Needs TYPESAFE_API_KEY; skipped otherwise. Not part of `npm test` (network); run: npm run test:live
 const test = require("node:test");
 const assert = require("node:assert");
 const { judge } = require("../jev");

@@ -267,14 +267,19 @@
     if (live ? stick : true) scrollDown(true);
   }
 
-  // Poll/history payloads carry { n, me }; SSE broadcasts carry counts only, so keep our own `me` then.
+  // Snapshots arrive from the POST reply, polls and SSE in no fixed order; `at` (server ms of the last
+  // change) keeps an older one from overwriting a newer. Other viewers' SSE copies carry counts only,
+  // so `me` is kept as-is when absent.
   function applyReactions(map) {
     for (const [id, rx] of Object.entries(map || {})) {
       const node = el.thread.querySelector(`.msg[data-id="${id}"]`);
       if (!node) continue;
+      const at = Number(rx.at) || 0;
+      if (at < Number(node.dataset.rxAt || 0)) continue;
+      node.dataset.rxAt = at;
       for (const b of node.querySelectorAll(".react")) {
         const r = rx[b.dataset.emoji];
-        if (!r) continue;
+        if (!r || typeof r !== "object") continue;
         b.querySelector(".n").textContent = r.n > 0 ? r.n : "";
         if (r.me !== undefined) b.classList.toggle("on", r.me);
       }

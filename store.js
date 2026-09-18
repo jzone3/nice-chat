@@ -26,8 +26,27 @@ const LIMITS = {
 
 const pub = (u) => (u ? { name: u.name, emoji: u.emoji } : null);
 const fameSort = (a, b) => b.niceness - a.niceness || b.ts - a.ts;
-// { "❤️": { n: 3, me: true }, "😂": { n: 0, me: false } }
-const shapeReactions = (counts, mine) => Object.fromEntries(REACTIONS.map((e) => [e, { n: Number(counts[e]) || 0, me: Boolean(mine[e]) }]));
+// { "❤️": { n: 3, me: true }, "😂": { n: 0, me: false }, at: <ms of last change> } — `at` lets clients drop stale snapshots.
+const shapeReactions = (counts, mine, at) => ({
+  ...Object.fromEntries(REACTIONS.map((e) => [e, { n: Math.max(0, Number(counts[e]) || 0), me: Boolean(mine[e]) }])),
+  at: Number(at) || 0,
+});
+
+// Membership set + count hash + changed-at zset must move together, or overlapping toggles from one
+// user (several tabs) can double-decrement.
+const TOGGLE_LUA = `
+local added = redis.call('SADD', KEYS[1], ARGV[1])
+if added == 1 then
+  redis.call('HINCRBY', KEYS[2], ARGV[2], 1)
+else
+  redis.call('SREM', KEYS[1], ARGV[1])
+  if tonumber(redis.call('HINCRBY', KEYS[2], ARGV[2], -1)) < 0 then redis.call('HSET', KEYS[2], ARGV[2], 0) end
+end
+redis.call('ZADD', KEYS[3], ARGV[3], ARGV[4])
+redis.call('ZREMRANGEBYRANK', KEYS[3], 0, -tonumber(ARGV[6]) - 1)
+redis.call('EXPIRE', KEYS[1], ARGV[5])
+redis.call('EXPIRE', KEYS[2], ARGV[5])
+return added`;
 
 // ------------------------------------------------------------------ memory
 function memoryStore() {
@@ -86,7 +105,7 @@ function memoryStore() {
         counts[e] = (byEmoji[e] || []).length;
         mine[e] = Boolean(uid) && (byEmoji[e] || []).includes(uid);
       }
-      out[id] = shapeReactions(counts, mine);
+      out[id] = shapeReactions(counts, mine, reactedAt.get(id));
     }
     return out;
   }
@@ -223,7 +242,7 @@ function redisStore(url) {
     if (!ids.length) return {};
     const cmds = [];
     for (const id of ids) {
-      cmds.push(["HGETALL", K.rx(id)]);
+      cmds.push(["HGETALL", K.rx(id)], ["ZSCORE", K.rxts, id]);
       if (uid) cmds.push(["SMISMEMBER", K.rxu(id), ...REACTIONS.map((e) => `${e}:${uid}`)]);
     }
     const replies = await write(cmds);
@@ -233,12 +252,13 @@ function redisStore(url) {
       const h = replies[i++] || [];
       const counts = {};
       for (let j = 0; j < h.length; j += 2) counts[h[j]] = h[j + 1];
+      const at = replies[i++];
       const mine = {};
       if (uid) {
         const flags = replies[i++] || [];
         REACTIONS.forEach((e, k) => (mine[e] = Number(flags[k]) === 1));
       }
-      out[id] = shapeReactions(counts, mine);
+      out[id] = shapeReactions(counts, mine, at);
     }
     return out;
   }
@@ -278,12 +298,7 @@ function redisStore(url) {
       return (await this.history()).some((m) => m.id === id);
     },
     async toggleReaction(id, emoji, uid) {
-      const member = `${emoji}:${uid}`;
-      const added = Number(await r.exec(["SADD", K.rxu(id), member]));
-      const cmds = [["ZADD", K.rxts, String(Date.now()), id], ["ZREMRANGEBYRANK", K.rxts, "0", String(-MAX_MESSAGES - 1)], ["EXPIRE", K.rxu(id), String(REACTION_TTL_S)], ["EXPIRE", K.rx(id), String(REACTION_TTL_S)]];
-      if (added) cmds.unshift(["HINCRBY", K.rx(id), emoji, "1"]);
-      else cmds.unshift(["SREM", K.rxu(id), member], ["HINCRBY", K.rx(id), emoji, "-1"]);
-      await write(cmds);
+      await r.exec(["EVAL", TOGGLE_LUA, "3", K.rxu(id), K.rx(id), K.rxts, `${emoji}:${uid}`, emoji, String(Date.now()), id, String(REACTION_TTL_S), String(MAX_MESSAGES)]);
       return (await reactionsFor([id], uid))[id];
     },
     async reactions(ids, uid) {

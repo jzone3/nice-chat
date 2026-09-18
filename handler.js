@@ -120,9 +120,9 @@ function publicUser(u) {
 }
 
 const MSG_ID_RE = /^[a-z0-9]{6,24}$/;
-// Counts only; `me` is per viewer and must not be broadcast.
+// `me` is per viewer: only the toggling user's own connections (other tabs) get it; everyone else gets counts.
 function publicReactions(rx) {
-  return Object.fromEntries(Object.entries(rx).map(([e, v]) => [e, { n: v.n }]));
+  return Object.fromEntries(Object.entries(rx).map(([e, v]) => (typeof v === "object" ? [e, { n: v.n }] : [e, v])));
 }
 
 // ---------------------------------------------------------------- realtime (sse transport only)
@@ -283,7 +283,11 @@ async function handle(req, res) {
       if (typeof id !== "string" || !MSG_ID_RE.test(id) || !store.REACTIONS.includes(emoji)) return send(res, 400, { error: "Bad reaction" });
       if (!(await store.hasMessage(id))) return send(res, 404, { error: "That message is gone" });
       const reactions = await store.toggleReaction(id, emoji, uid);
-      if (TRANSPORT === "sse") broadcast("reactions", { id, reactions: publicReactions(reactions) });
+      if (TRANSPORT === "sse") {
+        const mine = `event: reactions\ndata: ${JSON.stringify({ id, reactions })}\n\n`;
+        const others = `event: reactions\ndata: ${JSON.stringify({ id, reactions: publicReactions(reactions) })}\n\n`;
+        for (const c of clients) push(c, c.uid === uid ? mine : others);
+      }
       return send(res, 200, { id, reactions });
     }
 
