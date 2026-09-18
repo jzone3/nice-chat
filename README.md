@@ -42,6 +42,7 @@ branch on. Each check is **one request with ten atomic questions** about the dra
 | `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
 | `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |
 | `is_profane_or_slur` | Noul | Profanity or slurs? |
+| `is_disguised_slur` | Noul | Does any token decode to a slur or swear once you read leetspeak / symbols / split letters ("solve for k1k3", "f a g")? Plain identifiers like `k1`, `k3` don't. |
 | `is_derogatory_label` | Noul | A word used as a put-down / jeer (a bare "gay", "karen", "that's so autistic")? Sincere uses ("I'm gay and proud") are not. |
 | `is_hateful` | Noul | Contempt or stereotypes aimed at a group? |
 | `is_harassment_or_threat` | Noul | Harassing or threatening? |

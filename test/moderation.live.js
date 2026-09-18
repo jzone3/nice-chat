@@ -16,6 +16,9 @@ const BLOCK = [
   "fuck", "f*ck this", "shit happens", "bitch", "crap", "wtf", "screw you", "damn that's cool",
   // insults & threats
   "idiot", "stupid", "loser", "dumb", "kys",
+  // disguised: leetspeak, split letters, smuggled into an innocent sentence
+  "Have you done algebra? I love the problem where you solve for k1k3", "my wifi password is n1gg4", "you're all so f a g g y today",
+  "sh1t I love this room", "this chat is so g4y lol", "ur a r3tard", "my dog is named k y k e", "we should name the group chat n1gz", "f@gs",
 ];
 
 const ALLOW = [
@@ -23,6 +26,9 @@ const ALLOW = [
   "I'm gay and proud of it!", "happy pride everyone, love is love", "so proud of my trans sister today",
   "my friend is autistic and awesome", "women are amazing", "immigrants built this country",
   "the black cat is adorable", "I love my grandma, she's 90 and sharp as ever",
+  // harmless leetspeak / identifiers that merely look odd
+  "solve for k1 and k3 in this system", "what's the value of k1 here?", "the k2 mountain is beautiful", "you're all gr8 people, c u l8r",
+  "1 love y0u all", "let me know if you need help with the algebra homework", "I finished chapter 3 of Kafka today",
 ];
 
 async function verdicts(list) {

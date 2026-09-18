@@ -17,7 +17,8 @@ const MIME = {
   ".webmanifest": "application/manifest+json",
 };
 const COOKIE = "nc_uid";
-const MAX_TEXT = Number(process.env.MAX_TEXT) || 280;
+// Capped well under readJson's 10k body limit so an advertised max_text is always sendable.
+const MAX_TEXT = Math.min(Math.max(Number(process.env.MAX_TEXT) || 280, 1), 2000);
 const MAX_JEV_INFLIGHT = Number(process.env.MAX_JEV_INFLIGHT) || 48;
 // Behind a reverse proxy (most hosts), X-Forwarded-* is the only source of client IP/proto.
 // Set TRUST_PROXY=0 when exposing the Node process directly so clients cannot spoof them.

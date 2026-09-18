@@ -46,6 +46,9 @@ test("redis store: limiter enforces every window and the jev budget", async () =
   const { close, port, counters } = await fakeRedis();
   process.env.REDIS_URL = `redis://127.0.0.1:${port}`;
   process.env.JEV_BUDGET_30M = "2";
+  // store.js picks its backend at require time; make sure we get a fresh one even when another
+  // test file already loaded the memory store in this process.
+  delete require.cache[require.resolve("../store")];
   const store = require("../store");
   try {
     assert.equal(store.shared, true);

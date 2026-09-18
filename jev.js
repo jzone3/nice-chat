@@ -46,6 +46,15 @@ const QUESTIONS = {
       false: "Clean language",
     },
   },
+  is_disguised_slur: {
+    type: "noul",
+    instructions:
+      "Decode any odd-looking token in `draft_message` — read digits and symbols as the letters they resemble (1/!=i, 3=e, 4/@=a, 0=o, 5/$=s, 7=t), drop spaces/dots/hyphens between letters, sound out homophones — does a single token, once decoded, spell a slur, swear word or hateful term? Innocent framing (a math problem, a variable name, a wifi/pet name, 'lol') does not make it fine. Ordinary short identifiers that don't decode to a word are fine.",
+    criteria: {
+      true: "One token decodes to a slur or obscenity: k1k3 -> kike, n1gg3r -> nigger, f@g, f a g, sh1t, b1tch, g4y used as a jeer",
+      false: "No token decodes to a slur or swear: ordinary words, leetspeak of harmless words (gr8, l8r, y0u), separate math/code identifiers such as k1, k3, x2, n, real names or brands that merely look unusual",
+    },
+  },
   is_derogatory_label: {
     type: "noul",
     instructions:
@@ -101,6 +110,7 @@ const QUESTIONS = {
 const THRESHOLDS = {
   is_harassment_or_threat: 0.35,
   is_profane_or_slur: 0.4,
+  is_disguised_slur: 0.4,
   is_hateful: 0.4,
   is_derogatory_label: 0.5,
   is_insult: 0.5,
@@ -115,6 +125,7 @@ const THRESHOLDS = {
 const REASON_LABELS = {
   is_harassment_or_threat: "that reads as a threat",
   is_profane_or_slur: "watch the language",
+  is_disguised_slur: "nice try hiding that",
   is_hateful: "no hate here",
   is_derogatory_label: "that word is used to put people down",
   is_insult: "that's an insult",
@@ -125,7 +136,7 @@ const REASON_LABELS = {
   low_niceness: "not quite nice enough",
 };
 
-const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_hateful", "is_derogatory_label", "is_insult"];
+const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label", "is_insult"];
 
 // ------------------------------------------------------------------ decide
 function decide(answers) {
@@ -166,6 +177,7 @@ function decide(answers) {
     flags.is_harassment_or_threat ?? 0,
     flags.is_insult ?? 0,
     flags.is_profane_or_slur ?? 0,
+    flags.is_disguised_slur ?? 0,
     flags.is_hateful ?? 0,
     flags.is_derogatory_label ?? 0,
     toneProbs.hostile ?? 0,
@@ -208,9 +220,17 @@ function wordCount(s) {
   return s.trim().split(/\s+/).filter(Boolean).length;
 }
 
-async function callJev(body, attempt = 0) {
+function budgetError() {
+  const err = new Error("jev budget exhausted");
+  err.cooldown = true;
+  return err;
+}
+
+// Every HTTP request to Jev, retries included, goes through reserve() first.
+async function callJev(body, reserve, attempt = 0) {
   const key = process.env.TYPESAFE_API_KEY;
   if (!key) throw new Error("TYPESAFE_API_KEY not set");
+  if (reserve && !(await reserve())) throw budgetError();
   const res = await fetch(ENDPOINT, {
     method: "POST",
     headers: { Authorization: `Bearer ${key}`, "Content-Type": "application/json" },
@@ -219,7 +239,7 @@ async function callJev(body, attempt = 0) {
   });
   if ((res.status === 429 || res.status >= 500) && attempt < 2) {
     await new Promise((r) => setTimeout(r, 300 * 2 ** attempt));
-    return callJev(body, attempt + 1);
+    return callJev(body, reserve, attempt + 1);
   }
   if (!res.ok) throw new Error(`Jev ${res.status}: ${(await res.text()).slice(0, 200)}`);
   return res.json();
@@ -228,8 +248,8 @@ async function callJev(body, attempt = 0) {
 /**
  * Judge a draft. `context` = last few room messages (strings) for light context.
  * Drafts under 3 words are skipped while typing; pass `force` to judge anyway (on send).
- * `reserve` runs right before a real API call (skips and cache hits never reach it) and may return
- * false to refuse it — that's how the caller enforces a global call budget.
+ * `reserve` runs right before each real API request, retries included (skips and cache hits never
+ * reach it), and may return false to refuse it — that's how the caller enforces a global call budget.
  */
 async function judge(draft, context = [], { force = false, reserve } = {}) {
   const text = draft.trim();
@@ -239,16 +259,11 @@ async function judge(draft, context = [], { force = false, reserve } = {}) {
   const state = { recent_messages: context.slice(-3), draft_message: text };
   const cacheKey = JSON.stringify(state);
   if (cache.has(cacheKey)) return { ...cache.get(cacheKey), cached: true };
-  if (reserve && !(await reserve())) {
-    const err = new Error("jev budget exhausted");
-    err.cooldown = true;
-    throw err;
-  }
 
   const t0 = performance.now();
   let data;
   try {
-    data = await callJev({ state, model: MODEL, questions: QUESTIONS });
+    data = await callJev({ state, model: MODEL, questions: QUESTIONS }, reserve);
   } catch (e) {
     stats.errors++;
     throw e;
