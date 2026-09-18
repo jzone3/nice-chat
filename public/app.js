@@ -147,7 +147,10 @@
   let pollMs = 2500;
   let es = null;
   let pollTimer = null;
-  let pollCursor = 0; // ts of the newest message we've rendered
+  // Cursor is server time at the last poll minus an overlap window: messages written a moment before
+  // that time (e.g. by another instance) would otherwise be skipped; dedupe by id makes the overlap free.
+  let pollCursor = 0;
+  const POLL_OVERLAP_MS = 10_000;
   let polling = false;
 
   function applyHistory(d) {
@@ -186,7 +189,7 @@
         renderPresence(data.presence);
         renderStats(data.stats);
       }
-      for (const m of data.messages) pollCursor = Math.max(pollCursor, m.ts);
+      pollCursor = Math.max(pollCursor, (data.now || Date.now()) - POLL_OVERLAP_MS);
     } catch {
       el.online.textContent = "…";
     } finally {
@@ -400,7 +403,7 @@
       setVerdict(null);
       renderLive(data);
       renderStats(data.stats);
-      if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame); pollCursor = Math.max(pollCursor, data.message.ts); }
+      if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame); }
       scrollDown(true);
     } catch {
       setVerdict({ error: "Couldn't reach the server" });
