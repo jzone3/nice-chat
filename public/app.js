@@ -11,7 +11,12 @@
     modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
     pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
     toast: $("toast"),
+    chat: document.querySelector(".chat"), rail: $("rail"), live: $("live"),
+    railToggle: $("rail-toggle"), railClose: $("rail-close"), railBackdrop: $("rail-backdrop"),
   };
+  // Mirrors the phone media query in style.css.
+  const MOBILE = matchMedia("(max-width: 640px), ((max-height: 520px) and (pointer: coarse))");
+  const COARSE = matchMedia("(pointer: coarse)");
 
   const EMOJIS = "😀 😎 🥳 🤩 😇 🥰 🤠 🤓 🧐 🥸 😺 🐶 🦊 🐼 🐨 🦁 🐸 🐙 🦄 🐝 🦋 🐢 🐧 🦖 🌈 🌸 🌻 🍀 🌙 ⭐ 🔥 🍕 🍩 🧁 🍓 🥑 🎈 🎨 🎸 🚀 🛸 🧸 🪐 🍄 🐳 🦥 🦩 🫧".split(" ");
   const FLAG_LABELS = {
@@ -392,9 +397,11 @@
       el.liveProbs.replaceChildren();
       el.liveMeta.textContent = "";
       el.liveHint.style.display = "";
+      el.live.classList.add("empty");
       return;
     }
     el.liveHint.style.display = "none";
+    el.live.classList.remove("empty");
     renderProbs(el.liveProbs, v);
     el.liveMeta.textContent = `${v.allowed ? "ALLOW" : "BLOCK"} · ${v.latency_ms} ms${v.cached ? " · cached" : ""}${v.hits?.length ? " · hits: " + v.hits.join(", ") : ""}`;
   }
@@ -428,8 +435,9 @@
     clearTimeout(judgeTimer);
     judgeTimer = setTimeout(judgeDraft, 380);
   });
+  // Enter sends with a keyboard; on touch devices it inserts a newline and the Send button sends.
   el.draft.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.composer.requestSubmit(); }
+    if (e.key === "Enter" && !e.shiftKey && !COARSE.matches) { e.preventDefault(); el.composer.requestSubmit(); }
   });
 
   // ------------------------------------------------------------ wiggle
@@ -493,6 +501,38 @@
       el.draft.focus();
     }
   };
+
+  // ------------------------------------------------------------ phones
+  // The live Jev read sits above the composer, the rail folds into a bottom sheet, and the page is sized
+  // to the visual viewport so the composer stays above the on-screen keyboard (iOS pans the viewport
+  // instead of resizing it; --vvt follows that pan).
+  function placeLive() {
+    if (MOBILE.matches) el.chat.insertBefore(el.live, el.composer);
+    else el.rail.insertBefore(el.live, el.rail.querySelector(".fame"));
+  }
+  function openRail(on) {
+    el.rail.classList.toggle("open", on);
+    el.railBackdrop.classList.toggle("show", on);
+    el.railToggle.setAttribute("aria-expanded", String(on));
+  }
+  el.railToggle.onclick = () => openRail(!el.rail.classList.contains("open"));
+  el.railClose.onclick = () => openRail(false);
+  el.railBackdrop.onclick = () => openRail(false);
+
+  const vv = window.visualViewport;
+  function fitViewport() {
+    const root = document.documentElement.style;
+    if (!MOBILE.matches) { root.removeProperty("--vvh"); root.removeProperty("--vvt"); return; }
+    const stick = nearBottom();
+    root.setProperty("--vvh", `${Math.round(vv ? vv.height : innerHeight)}px`);
+    root.setProperty("--vvt", `${Math.round(vv ? vv.offsetTop : 0)}px`);
+    if (stick) scrollDown(true);
+  }
+  (vv || window).addEventListener("resize", fitViewport);
+  vv?.addEventListener("scroll", fitViewport);
+  MOBILE.addEventListener("change", () => { placeLive(); openRail(false); fitViewport(); });
+  placeLive();
+  fitViewport();
 
   // ------------------------------------------------------------ debugger
   const params = new URLSearchParams(location.search);
