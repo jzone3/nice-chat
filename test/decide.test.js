@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { decide } = require("../jev");
+const { decide, judge } = require("../jev");
 
 function answers(over = {}) {
   const base = {
@@ -91,4 +91,14 @@ test("plain but too-cold message is blocked on niceness floor", () => {
   );
   assert.equal(d.allowed, false);
   assert.deepEqual(d.hits, ["low_niceness"]);
+});
+
+test("judge: reserve() is consulted only when a real Jev call is about to happen", async () => {
+  let asked = 0;
+  const reserve = async () => (asked++, false);
+  const short = await judge("hi there", [], { reserve });
+  assert.strictEqual(short.skipped, true);
+  assert.strictEqual(asked, 0);
+  await assert.rejects(judge("thank you so much friend", [], { reserve }), (e) => e.cooldown === true);
+  assert.strictEqual(asked, 1);
 });

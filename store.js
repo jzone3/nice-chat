@@ -16,12 +16,19 @@ const FAME_KEEP = 25;
 const REACTIONS = ["❤️", "😂"];
 const REACTION_TTL_S = 60 * 60 * 24 * 30;
 
-// Fixed windows per limiter kind: at most `max` hits per `windowMs` for one key (uid or ip).
+// Fixed windows per limiter kind: every window must have room, so each kind gets a burst cap plus
+// a sustained one. `*_ip` kinds are keyed by client IP so clearing cookies doesn't reset them;
+// `jev` is keyed by a single constant and caps the room's total upstream Jev calls.
+const MIN = 60_000;
+const JEV_BUDGET_30M = Number(process.env.JEV_BUDGET_30M) || 3000;
 const LIMITS = {
-  judge: { max: 8, windowMs: 5_000 }, // as-you-type checks
-  send: { max: 5, windowMs: 10_000 }, // real sends
-  join: { max: 10, windowMs: 60_000 },
-  react: { max: 30, windowMs: 10_000 },
+  judge: [{ max: 8, windowMs: 5_000 }, { max: 150, windowMs: 10 * MIN }], // as-you-type checks
+  judge_ip: [{ max: 300, windowMs: 10 * MIN }],
+  send: [{ max: 5, windowMs: 10_000 }, { max: 40, windowMs: 10 * MIN }], // real sends
+  send_ip: [{ max: 60, windowMs: 10 * MIN }],
+  join: [{ max: 10, windowMs: MIN }, { max: 30, windowMs: 60 * MIN }],
+  react: [{ max: 30, windowMs: 10_000 }, { max: 300, windowMs: 10 * MIN }],
+  jev: [{ max: JEV_BUDGET_30M, windowMs: 30 * MIN }],
 };
 
 const pub = (u) => (u ? { name: u.name, emoji: u.emoji } : null);
@@ -92,7 +99,7 @@ function memoryStore() {
 
   setInterval(() => {
     const now = Date.now();
-    for (const [k, h] of hits) if (h.reset < now) hits.delete(k);
+    for (const [k, h] of hits) if (h.reset <= now) hits.delete(k);
   }, 60_000).unref();
 
   function reactionsFor(ids, uid) {
@@ -180,12 +187,15 @@ function memoryStore() {
       return presence();
     },
     async allow(kind, key) {
-      const { max, windowMs } = LIMITS[kind];
       const now = Date.now();
-      const k = `${kind}:${key}`;
-      let h = hits.get(k);
-      if (!h || h.reset < now) hits.set(k, (h = { n: 0, reset: now + windowMs }));
-      return ++h.n <= max;
+      let ok = true;
+      for (const { max, windowMs } of LIMITS[kind]) {
+        const k = `${kind}:${key}:${windowMs}`;
+        let h = hits.get(k);
+        if (!h || h.reset <= now) hits.set(k, (h = { n: 0, reset: now + windowMs }));
+        if (++h.n > max) ok = false;
+      }
+      return ok;
     },
     async bumpStats({ blocked, latency_ms }) {
       stats.requests++;
@@ -334,13 +344,15 @@ function redisStore(url) {
       return presence();
     },
     async allow(kind, key) {
-      const { max, windowMs } = LIMITS[kind];
-      const k = K.rl(kind, key, Math.floor(Date.now() / windowMs));
-      const [n] = await write([
-        ["INCR", k],
-        ["PEXPIRE", k, String(windowMs * 2)],
-      ]);
-      return Number(n) <= max;
+      const now = Date.now();
+      const windows = LIMITS[kind];
+      const replies = await write(
+        windows.flatMap(({ windowMs }) => {
+          const k = K.rl(kind, key, `${windowMs}:${Math.floor(now / windowMs)}`);
+          return [["INCR", k], ["PEXPIRE", k, String(windowMs * 2)]];
+        })
+      );
+      return windows.every(({ max }, i) => Number(replies[i * 2]) <= max);
     },
     async bumpStats({ blocked, latency_ms }) {
       const cmds = [

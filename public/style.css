@@ -188,7 +188,10 @@ body.quake::after { content: ""; position: fixed; inset: 0; pointer-events: none
 .verdict-face { font-size: 1.7rem; line-height: 1; transition: transform 0.2s; }
 .meter { width: 120px; height: 1rem; border: 2px solid var(--line); border-radius: 999px; overflow: hidden; background: var(--track); flex-shrink: 0; }
 .meter-fill { height: 100%; width: 0; background: linear-gradient(90deg, var(--bad), var(--meh), var(--good)); background-size: 120px 100%; transition: width 0.35s cubic-bezier(0.2, 1.2, 0.4, 1); }
-.verdict-text { font-size: 0.95rem; color: var(--muted); }
+.verdict-text { font-size: 0.95rem; color: var(--muted); flex: 1; }
+.chars { font-size: 0.8rem; color: var(--muted); font-variant-numeric: tabular-nums; white-space: nowrap; }
+.chars:empty { display: none; }
+.chars.over { color: var(--bad); font-weight: 700; }
 .verdict.thinking .verdict-face { animation: think 0.8s linear infinite; }
 @keyframes think { to { transform: rotate(360deg); } }
 .reasons { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }

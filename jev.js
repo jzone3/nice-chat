@@ -228,8 +228,10 @@ async function callJev(body, attempt = 0) {
 /**
  * Judge a draft. `context` = last few room messages (strings) for light context.
  * Drafts under 3 words are skipped while typing; pass `force` to judge anyway (on send).
+ * `reserve` runs right before a real API call (skips and cache hits never reach it) and may return
+ * false to refuse it — that's how the caller enforces a global call budget.
  */
-async function judge(draft, context = [], { force = false } = {}) {
+async function judge(draft, context = [], { force = false, reserve } = {}) {
   const text = draft.trim();
   if (!force && wordCount(text) < 3) {
     return { allowed: true, reasons: [], niceness: null, tone: null, latency_ms: 0, skipped: true };
@@ -237,6 +239,11 @@ async function judge(draft, context = [], { force = false } = {}) {
   const state = { recent_messages: context.slice(-3), draft_message: text };
   const cacheKey = JSON.stringify(state);
   if (cache.has(cacheKey)) return { ...cache.get(cacheKey), cached: true };
+  if (reserve && !(await reserve())) {
+    const err = new Error("jev budget exhausted");
+    err.cooldown = true;
+    throw err;
+  }
 
   const t0 = performance.now();
   let data;

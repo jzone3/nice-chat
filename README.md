@@ -62,7 +62,8 @@ npm start                     # http://localhost:3000
 ```
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
-`MAX_MESSAGES`, `HISTORY`, `MAX_JEV_INFLIGHT`, `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
+`MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_30M` (room-wide Jev
+calls per 30 min, default 3000), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
 `REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
 
 ```bash
@@ -112,10 +113,13 @@ Endpoints: `GET /api/me` (also tells the browser which transport to use), `POST 
 `GET /api/stream` (SSE, long-running mode), `GET /api/poll?since=<ts>` (serverless mode;
 doubles as presence heartbeat), `POST /api/judge`, `POST /api/send`, `GET /api/stats`, `GET /healthz`.
 
-Public-room safeguards: 400-char messages, per-user fixed-window rate limits for typing
-checks / sends / joins, a cap on in-flight Jev calls per instance, bounded history, and an
-exact-state Jev cache. With Redis, users, messages, hall of fame, presence, rate limits and
-Jev stats are all shared, so any number of instances serve the same room.
+Public-room safeguards: 280-char messages (rejected, not truncated), layered fixed-window
+rate limits — burst + sustained per user for typing checks / sends / reactions, per IP for
+typing checks / sends / joins so clearing cookies doesn't reset them — a room-wide budget of
+Jev calls per 30 minutes (only real upstream calls count; skipped and cached drafts are free;
+when it runs out the room answers 503 "cooling down" instead of calling Jev), a cap on
+in-flight Jev calls per instance, bounded history, and an exact-state Jev cache. With Redis, users,
+messages, hall of fame, presence, rate limits and Jev stats are all shared, so any number of instances serve the same room.
 
 ---
 

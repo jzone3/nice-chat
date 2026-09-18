@@ -6,6 +6,7 @@ const path = require("path");
 process.env.DATA_FILE = path.join(os.tmpdir(), `nice-chat-test-${process.pid}.json`);
 delete process.env.REDIS_URL;
 delete process.env.KV_URL;
+process.env.JEV_BUDGET_30M = "3";
 const store = require("../store");
 
 const uid = "00000000-0000-4000-8000-000000000001";
@@ -56,4 +57,24 @@ test("memory store: fixed-window rate limit and stats", async () => {
   await store.bumpStats({ blocked: true, latency_ms: 100 });
   await store.bumpStats({ blocked: false, latency_ms: 50 });
   assert.deepEqual(await store.stats(), { requests: 2, blocked: 1, total_latency_ms: 150 });
+});
+
+test("memory store: sustained window keeps biting after the burst window resets", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1_000_000 });
+  const who = "typist";
+  let allowed = 0;
+  // judge = 8 per 5s burst, 150 per 10min sustained: stay just under the burst cap in each fresh 5s window
+  for (let round = 0; round < 25; round++) {
+    for (let i = 0; i < 8; i++) if (await store.allow("judge", who)) allowed++;
+    t.mock.timers.tick(5_000);
+  }
+  assert.equal(allowed, 150);
+  t.mock.timers.tick(10 * 60_000);
+  assert.equal(await store.allow("judge", who), true);
+});
+
+test("memory store: room-wide jev budget", async () => {
+  const results = [];
+  for (let i = 0; i < 5; i++) results.push(await store.allow("jev", "room"));
+  assert.deepEqual(results, [true, true, true, false, false]);
 });

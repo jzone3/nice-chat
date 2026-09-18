@@ -17,7 +17,7 @@ const MIME = {
   ".webmanifest": "application/manifest+json",
 };
 const COOKIE = "nc_uid";
-const MAX_TEXT = 400;
+const MAX_TEXT = Number(process.env.MAX_TEXT) || 280;
 const MAX_JEV_INFLIGHT = Number(process.env.MAX_JEV_INFLIGHT) || 48;
 // Behind a reverse proxy (most hosts), X-Forwarded-* is the only source of client IP/proto.
 // Set TRUST_PROXY=0 when exposing the Node process directly so clients cannot spoof them.
@@ -94,8 +94,11 @@ function clientIp(req) {
   return (typeof fwd === "string" && fwd.split(",")[0].trim()) || req.socket.remoteAddress || "?";
 }
 
+// Two gates in front of Jev: a per-instance concurrency cap, and a room-wide call budget
+// (store.allow("jev")) that is only charged when a request actually leaves for the API.
 let jevInflight = 0;
-async function gatedJudge(...args) {
+const reserveJev = () => store.allow("jev", "room");
+async function gatedJudge(draft, context, opts = {}) {
   if (jevInflight >= MAX_JEV_INFLIGHT) {
     const err = new Error("busy");
     err.busy = true;
@@ -103,7 +106,7 @@ async function gatedJudge(...args) {
   }
   jevInflight++;
   try {
-    const verdict = await judge(...args);
+    const verdict = await judge(draft, context, { ...opts, reserve: reserveJev });
     if (!verdict.cached && !verdict.skipped) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
     return verdict;
   } finally {
@@ -189,7 +192,7 @@ async function handle(req, res) {
     const user = await store.getUser(uid);
 
     if (req.method === "GET" && url.pathname === "/api/me") {
-      return send(res, 200, { user: publicUser(user), transport: TRANSPORT, poll_ms: POLL_MS, shared: store.shared });
+      return send(res, 200, { user: publicUser(user), transport: TRANSPORT, poll_ms: POLL_MS, max_text: MAX_TEXT, shared: store.shared });
     }
 
     if (req.method === "POST" && url.pathname === "/api/join") {
@@ -246,17 +249,23 @@ async function handle(req, res) {
     if (req.method === "POST" && url.pathname === "/api/judge") {
       if (!user) return send(res, 401, { error: "Join first" });
       if (!(await store.allow("judge", uid))) return send(res, 429, { error: "Typing fast! Give Jev a second." });
+      if (!(await store.allow("judge_ip", clientIp(req)))) return send(res, 429, { error: "Jev needs a breather — back in a few minutes" });
       const { draft = "" } = await readJson(req);
-      const verdict = await gatedJudge(String(draft).slice(0, MAX_TEXT), await store.recent(3));
+      if (typeof draft !== "string") return send(res, 400, { error: "Bad draft" });
+      if (draft.length > MAX_TEXT) return send(res, 400, { error: `Keep it under ${MAX_TEXT} characters` });
+      const verdict = await gatedJudge(draft, await store.recent(3));
       return send(res, 200, { ...verdict, stats: await stats() });
     }
 
     if (req.method === "POST" && url.pathname === "/api/send") {
       if (!user) return send(res, 401, { error: "Join first" });
       if (!(await store.allow("send", uid))) return send(res, 429, { error: "Whoa, one nice thing at a time!" });
+      if (!(await store.allow("send_ip", clientIp(req)))) return send(res, 429, { error: "That's a lot of messages — take a short break" });
       const { text = "" } = await readJson(req);
-      const clean = String(text).replace(/\s+/g, " ").trim().slice(0, MAX_TEXT);
+      if (typeof text !== "string") return send(res, 400, { error: "Bad message" });
+      const clean = text.replace(/\s+/g, " ").trim();
       if (!clean) return send(res, 400, { error: "Say something!" });
+      if (clean.length > MAX_TEXT) return send(res, 400, { error: `Keep it under ${MAX_TEXT} characters` });
       // Always re-judge server-side (short drafts included): the client cannot bypass the gate.
       const verdict = await gatedJudge(clean, await store.recent(3), { force: true });
       if (!verdict.allowed) return send(res, 403, { blocked: true, ...verdict, stats: await stats() });
@@ -300,6 +309,7 @@ async function handle(req, res) {
     res.end("not found");
   } catch (e) {
     if (e.busy) return send(res, 503, { error: "Jev is swamped, try again in a moment", busy: true });
+    if (e.cooldown) return send(res, 503, { error: "The room is cooling down — Jev is out of calls for a bit. Try again in a few minutes.", cooldown: true });
     if (e.badRequest) return send(res, 400, { error: "Bad JSON" });
     console.error(`[${req.method} ${url.pathname}]`, e.message);
     if (!res.headersSent) send(res, 502, { error: String(e.message || e) });
