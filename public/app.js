@@ -220,6 +220,7 @@
     const node = document.createElement("article");
     node.className = "msg" + (me && m.name === me.name && m.emoji === me.emoji ? " mine" : "");
     node.dataset.id = m.id || "";
+    node.dataset.ts = m.ts;
     node.dataset.name = m.name;
     node.dataset.emoji = m.emoji;
     node.innerHTML = `
@@ -235,7 +236,11 @@
     node.querySelector(".nice-badge").textContent = m.niceness != null ? `${FACES[Math.max(0, Math.min(4, Math.round(m.niceness) - 1))]} ${m.niceness.toFixed(1)} · ${m.tone}` : "";
     renderProbs(node.querySelector(".probs"), { flags: m.scores?.flags, tone: m.tone, tone_probs: m.scores?.tone_probs, niceness: m.niceness, niceness_probs: m.scores?.niceness_probs, hits: [] });
     if (m.scores?.latency_ms != null) node.querySelector(".probs").append(groupRow(`jev latency ${m.scores.latency_ms} ms`));
-    el.thread.append(node);
+    // Polling can deliver a peer's slightly older message after our own; keep the thread in ts order.
+    let before = null;
+    for (let n = el.thread.lastElementChild; n && n.classList.contains("msg") && Number(n.dataset.ts) > m.ts; n = n.previousElementSibling) before = n;
+    if (before) el.thread.insertBefore(node, before);
+    else el.thread.append(node);
     while (el.thread.querySelectorAll(".msg").length > 300) el.thread.querySelector(".msg").remove();
     if (live ? stick : true) scrollDown(true);
   }
