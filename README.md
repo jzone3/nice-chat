@@ -4,6 +4,8 @@
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
+**Live at https://benicechat.com**
+
 Every draft is scored by [Jev](https://docs.typesafe.ai) while you type, and again on the
 server when you hit send. Mean messages never land — the Send button just wiggles
 (harder the meaner you were) and tells you why.
