@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Nice Chat 💖 — the chat where only nice things get through</title>
   <meta name="description" content="One big chat room where every message is checked for niceness before it lands. Be kind, or wiggle." />
   <meta property="og:title" content="Nice Chat 💖" />
@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=15" />
+  <link rel="stylesheet" href="style.css?v=16" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -25,7 +25,7 @@
     </a>
     <div class="top-right">
       <div class="presence" id="presence" title="People online right now">
-        <span class="dot"></span><span id="online-count">…</span> online
+        <span class="dot"></span><span id="online-count">…</span> <span class="presence-word">online</span>
         <span class="faces" id="faces"></span>
       </div>
       <label class="debug-toggle" title="Hacker mode: see Jev's probabilities">
@@ -33,6 +33,7 @@
         <span class="switch"></span>
         <span class="debug-label">🐛 debugger</span>
       </label>
+      <button type="button" class="rail-toggle" id="rail-toggle" aria-controls="rail" aria-expanded="false" aria-label="Nicest things said and Jev stats" title="Nicest things said · Jev stats">🏆</button>
     </div>
   </header>
 
@@ -63,8 +64,12 @@
       </form>
     </section>
 
-    <aside class="rail">
-      <section class="card live" id="live">
+    <aside class="rail" id="rail">
+      <div class="rail-head">
+        <span>🏆 Hall of fame &amp; Jev stats</span>
+        <button type="button" class="rail-close" id="rail-close" aria-label="Close">✕</button>
+      </div>
+      <section class="card live empty" id="live">
         <h2>🔬 Live Jev read</h2>
         <p class="hint" id="live-hint">Start typing and Jev scores your draft as you go.</p>
         <div class="probs" id="live-probs"></div>
@@ -95,6 +100,8 @@
     <a href="https://github.com/jzone3/nice-chat" target="_blank" rel="noopener">source</a>
   </footer>
 
+  <div class="rail-backdrop" id="rail-backdrop"></div>
+
   <div class="modal hidden" id="join-modal">
     <form class="join card" id="join-form">
       <h1>💖 Nice Chat</h1>
@@ -115,6 +122,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=15"></script>
+  <script src="app.js?v=16"></script>
 </body>
 </html>
