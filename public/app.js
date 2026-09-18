@@ -155,8 +155,12 @@
   let pollCursor = 0;
   const POLL_OVERLAP_MS = 10_000;
   let polling = false;
+  // The thread is live-only: nothing said before this page loaded is shown, so a refresh starts clean.
+  // Server time (from the first payload) so it compares with message ts regardless of the local clock.
+  let joinedAt = 0;
 
   function applyHistory(d) {
+    if (!joinedAt) joinedAt = d.now || Date.now();
     el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
     for (const m of d.messages) addMessage(m, false);
     applyReactions(d.reactions);
@@ -198,7 +202,7 @@
         renderPresence(data.presence);
         renderStats(data.stats);
       }
-      pollCursor = Math.max(pollCursor, (data.now || Date.now()) - POLL_OVERLAP_MS);
+      pollCursor = Math.max(pollCursor, (data.now || Date.now()) - POLL_OVERLAP_MS, joinedAt);
     } catch {
       el.online.textContent = "…";
     } finally {
@@ -223,6 +227,7 @@
   }
 
   function addMessage(m, live) {
+    if (m.ts < joinedAt) return;
     if (m.id && el.thread.querySelector(`.msg[data-id="${m.id}"]`)) return;
     el.hello.style.display = "none";
     const stick = nearBottom();

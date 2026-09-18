@@ -23,6 +23,9 @@ Built by Devin — https://builtbydevin.ai/
   with presence, a "nicest things said" leaderboard, and live Jev stats.
 - **Username + emoji.** Pick a name and an emoji to join. A cookie remembers you on
   that computer, so refreshing or coming back later drops you straight into the room.
+- **Live-only thread.** You only see what's said while you're connected; a refresh
+  starts with an empty thread. (The server keeps a short rolling buffer so pollers and
+  reactions work, but no history is replayed to anyone.)
 
 ## How moderation works
 

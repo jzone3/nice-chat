@@ -233,7 +233,7 @@ async function handle(req, res) {
       const [messages, fame, presence, s] = await Promise.all([store.history(), store.hallOfFame(), store.presence(), stats()]);
       const reactions = await store.reactions(messages.map((m) => m.id), user ? uid : null);
       res.write(`retry: 3000\n`);
-      res.write(`event: history\ndata: ${JSON.stringify({ messages, fame, presence, stats: s, reactions })}\n\n`);
+      res.write(`event: history\ndata: ${JSON.stringify({ now: Date.now(), messages, fame, presence, stats: s, reactions })}\n\n`);
       schedulePresence();
       req.on("close", () => {
         clients.delete(client);
