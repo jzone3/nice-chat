@@ -280,7 +280,7 @@
     const text = el.draft.value;
     seq++;
     judgeCtl?.abort();
-    if (words(text) < 3) { latest = null; setVerdict({ skipped: text.trim().length > 0 }); renderLive(null); return; }
+    if (words(text) < 3) { latest = null; setVerdict(text.trim() ? { skipped: true } : null); renderLive(null); return; }
     const mySeq = seq;
     judgeCtl = new AbortController();
     setVerdict(null, { thinking: true });

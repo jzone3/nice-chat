@@ -290,3 +290,19 @@ body.debug .foot img { filter: grayscale(1) brightness(1.4); }
 body.debug .debug-toggle input:checked + .switch::after { background: #050805; }
 body.debug .modal { background: rgba(0, 0, 0, 0.8); }
 body.debug .join { background: var(--paper); }
+
+/* narrow screens (after debugger rules so they win) */
+@media (max-width: 560px) {
+  html { font-size: 16px; }
+  .layout { padding: 0.4rem 0.6rem 0.8rem; }
+  .compose-row { flex-wrap: wrap; }
+  #draft { flex-basis: 100%; }
+  .send { margin-left: auto; }
+  .msg .avatar { width: 2.2rem; height: 2.2rem; font-size: 1.3rem; }
+  .msg .bubble { padding: 0.5rem 0.7rem; }
+  .prob, .live .prob, body.debug .msg .probs .prob {
+    grid-template-columns: 1fr 3rem; grid-template-areas: "lbl val" "bar bar"; row-gap: 0.1rem;
+  }
+  .prob .lbl { grid-area: lbl; } .prob .val { grid-area: val; text-align: right; } .prob .bar { grid-area: bar; }
+  .prob.group, .live .prob.group { grid-template-columns: 1fr; grid-template-areas: none; }
+}
