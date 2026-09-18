@@ -488,7 +488,7 @@
       el.draft.style.height = "auto";
       latest = null;
       setVerdict(null);
-      renderLive(data);
+      renderLive(MOBILE.matches ? null : data); // the phone strip sits above the composer; the sent message carries its own badge
       renderStats(data.stats);
       if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame); }
       scrollDown(true);
