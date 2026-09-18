@@ -7,7 +7,7 @@
   "engines": { "node": ">=20" },
   "scripts": {
     "start": "node server.js",
-    "check": "node --check server.js && node --check jev.js && node --check store.js && node --check public/app.js",
+    "check": "node --check server.js && node --check handler.js && node --check jev.js && node --check store.js && node --check redis.js && node --check api/index.js && node --check public/app.js",
     "test": "node --test test/*.test.js"
   },
   "license": "MIT"

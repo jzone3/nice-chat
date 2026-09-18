@@ -191,7 +191,8 @@ body.quake::after { content: ""; position: fixed; inset: 0; pointer-events: none
 .prob.detail { display: none; }
 body.debug .prob.detail { display: grid; }
 .prob.group { grid-template-columns: 1fr; font-weight: 700; margin-top: 0.3rem; }
-.live .prob { grid-template-columns: 5.6rem 1fr 2.4rem; font-size: 0.75rem; }
+.live .prob { grid-template-columns: minmax(5.6rem, auto) 1fr 2.4rem; font-size: 0.75rem; }
+.prob .lbl { min-width: 0; overflow-wrap: anywhere; }
 .live .prob.group { grid-template-columns: 1fr; }
 .live-meta { font-size: 0.8rem; color: var(--muted); margin-top: 0.4rem; }
 
