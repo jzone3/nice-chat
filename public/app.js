@@ -510,9 +510,26 @@
   });
 
   // ------------------------------------------------------------ boot
+  // The join card stays hidden until the server has actually answered who we are: a cold start or a
+  // flaky request must not look like "you have no account" to someone who already joined.
+  async function whoami() {
+    for (let attempt = 0; ; attempt++) {
+      try {
+        const { ok, status, data } = await api("/api/me");
+        if (ok) return data;
+        if (status < 500 || attempt >= 3) return data;
+      } catch {
+        if (attempt >= 3) return {};
+      }
+      await new Promise((r) => setTimeout(r, 600 * (attempt + 1)));
+    }
+  }
+
   (async () => {
-    let data = {};
-    try { ({ data } = await api("/api/me")); } catch {}
+    const placeholder = el.draft.placeholder;
+    el.draft.placeholder = "Connecting…";
+    const data = await whoami();
+    el.draft.placeholder = placeholder;
     if (data.transport === "poll") { transport = "poll"; pollMs = data.poll_ms || pollMs; }
     connect();
     if (data.user) enter(data.user);
