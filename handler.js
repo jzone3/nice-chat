@@ -3,7 +3,7 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { judge, MODEL } = require("./jev");
+const { judge, judgeName, MODEL } = require("./jev");
 const store = require("./store");
 
 const PUBLIC = path.join(__dirname, "public");
@@ -115,6 +115,22 @@ async function gatedJudge(draft, context, opts = {}) {
   }
 }
 
+async function gatedJudgeName(name) {
+  if (jevInflight >= MAX_JEV_INFLIGHT) {
+    const err = new Error("busy");
+    err.busy = true;
+    throw err;
+  }
+  jevInflight++;
+  try {
+    const verdict = await judgeName(name, { reserve: reserveJev });
+    if (!verdict.cached) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
+    return verdict;
+  } finally {
+    jevInflight--;
+  }
+}
+
 async function stats() {
   return { ...(await store.stats()), model: MODEL };
 }
@@ -196,10 +212,16 @@ async function handle(req, res) {
       return send(res, 200, { user: publicUser(user), transport: TRANSPORT, poll_ms: POLL_MS, max_text: MAX_TEXT, shared: store.shared });
     }
 
+    // Join, or change name/emoji: same call; the cookie decides. Names are judged by Jev on the way in
+    // (a name sits next to every message, so the same promise applies), skipped when unchanged.
     if (req.method === "POST" && url.pathname === "/api/join") {
       if (!(await store.allow("join", clientIp(req)))) return send(res, 429, { error: "Slow down a little" });
       const prof = cleanProfile(await readJson(req));
       if (prof.error) return send(res, 400, { error: prof.error });
+      if (!user || user.name !== prof.name) {
+        const nv = await gatedJudgeName(prof.name);
+        if (!nv.allowed) return send(res, 403, { blocked: true, error: "Jev isn't feeling that name", reasons: nv.reasons, flags: nv.flags });
+      }
       const id = uid || crypto.randomUUID();
       const u = await store.upsertUser(id, prof);
       await store.heartbeat(id);
@@ -310,7 +332,7 @@ async function handle(req, res) {
     res.end("not found");
   } catch (e) {
     if (e.busy) return send(res, 503, { error: "Jev is swamped, try again in a moment", busy: true });
-    if (e.cooldown) return send(res, 503, { error: "The room is cooling down — Jev is out of calls for a bit. Try again in a few minutes.", cooldown: true });
+    if (e.cooldown) return send(res, 503, { error: "The room hit today's Jev budget — back tomorrow!", cooldown: true });
     if (e.badRequest) return send(res, 400, { error: "Bad JSON" });
     console.error(`[${req.method} ${url.pathname}]`, e.message);
     if (!res.headersSent) send(res, 502, { error: String(e.message || e) });

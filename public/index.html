@@ -2,7 +2,7 @@
 <html lang="en">
 <head>
   <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>Nice Chat 💖 — the chat where only nice things get through</title>
   <meta name="description" content="One big chat room where every message is checked for niceness before it lands. Be kind, or wiggle." />
   <meta property="og:title" content="Nice Chat 💖" />
@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=14" />
+  <link rel="stylesheet" href="style.css?v=20" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -25,7 +25,7 @@
     </a>
     <div class="top-right">
       <div class="presence" id="presence" title="People online right now">
-        <span class="dot"></span><span id="online-count">…</span> online
+        <span class="dot"></span><span id="online-count">…</span> <span class="presence-word">online</span>
         <span class="faces" id="faces"></span>
       </div>
       <label class="debug-toggle" title="Hacker mode: see Jev's probabilities">
@@ -33,6 +33,7 @@
         <span class="switch"></span>
         <span class="debug-label">🐛 debugger</span>
       </label>
+      <button type="button" class="rail-toggle" id="rail-toggle" aria-controls="rail" aria-expanded="false" aria-label="Nicest things said and Jev stats" title="Nicest things said · Jev stats">🏆</button>
     </div>
   </header>
 
@@ -47,7 +48,7 @@
 
       <form class="composer" id="composer" autocomplete="off">
         <div class="compose-row">
-          <span class="me-emoji" id="me-emoji">🙂</span>
+          <button type="button" class="me-emoji" id="me-emoji" title="Change your name or emoji" aria-label="Change your name or emoji" disabled>🙂</button>
           <textarea id="draft" rows="1" maxlength="280" placeholder="Type something nice…" disabled></textarea>
           <button type="submit" id="send" class="send" disabled>
             <span class="send-label">Send</span> <span class="send-emoji">💌</span>
@@ -63,8 +64,12 @@
       </form>
     </section>
 
-    <aside class="rail">
-      <section class="card live" id="live">
+    <aside class="rail" id="rail">
+      <div class="rail-head">
+        <span>🏆 Hall of fame &amp; Jev stats</span>
+        <button type="button" class="rail-close" id="rail-close" aria-label="Close">✕</button>
+      </div>
+      <section class="card live empty" id="live">
         <h2>🔬 Live Jev read</h2>
         <p class="hint" id="live-hint">Start typing and Jev scores your draft as you go.</p>
         <div class="probs" id="live-probs"></div>
@@ -90,15 +95,18 @@
   </main>
 
   <footer class="foot">
-    <a class="bbd" href="https://builtbydevin.ai/" target="_blank" rel="noopener">Built by Devin</a>
+    <a class="bbd" href="https://builtbydevin.ai/" target="_blank" rel="noopener">Built with Devin</a>
     <span>·</span>
     <a href="https://github.com/jzone3/nice-chat" target="_blank" rel="noopener">source</a>
   </footer>
 
+  <div class="rail-backdrop" id="rail-backdrop"></div>
+
   <div class="modal hidden" id="join-modal">
     <form class="join card" id="join-form">
-      <h1>💖 Nice Chat</h1>
-      <p class="join-sub">One big room. Everyone in the world. Only nice messages get through.</p>
+      <button type="button" class="join-close hidden" id="join-close" aria-label="Cancel">✕</button>
+      <h1 id="join-title">💖 Nice Chat</h1>
+      <p class="join-sub" id="join-sub">One big room. Everyone in the world. Only nice messages get through.</p>
       <label class="field">
         <span>What should we call you?</span>
         <input id="join-name" maxlength="20" placeholder="e.g. sunny sam" required autofocus />
@@ -110,11 +118,11 @@
       <div class="join-preview" id="join-preview"><span class="pv-emoji">🙂</span> <span class="pv-name">you</span></div>
       <button type="submit" class="join-btn" id="join-btn">Join the chat 🎉</button>
       <p class="join-err" id="join-err"></p>
-      <p class="join-fine">We drop a cookie so this computer remembers you. That's all it does.</p>
+      <p class="join-fine">Jev checks names too — keep it friendly. We drop a cookie so this computer remembers you. That's all it does.</p>
     </form>
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=14"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

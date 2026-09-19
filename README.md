@@ -1,6 +1,6 @@
 # 💖 Nice Chat
 
-[Built by Devin](https://builtbydevin.ai/)
+[Built with Devin](https://builtbydevin.ai/)
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
@@ -36,6 +36,7 @@ branch on. Each check is **one request with ten atomic questions** about the dra
 | id | type | question |
 | --- | --- | --- |
 | `is_kind` | Noul | Is it kind or friendly? |
+| `is_laughter` | Noul | Just laughter / amusement ("hahaha", "LOL", 😂)? Laughing is good here, so it overrides cold-tone / low-niceness reads (e.g. right after someone's mishap); only profanity, slurs, hate or threats still block. |
 | `is_insult` | Noul | Does it insult or demean someone? |
 | `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
 | `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |
@@ -61,8 +62,8 @@ npm start                     # http://localhost:3000
 ```
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
-`MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_30M` (room-wide Jev
-calls per 30 min, default 3000), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
+`MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_DAY` (room-wide Jev
+calls per UTC day, default 100000), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
 `REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
 
 ```bash
@@ -115,11 +116,11 @@ doubles as presence heartbeat), `POST /api/judge`, `POST /api/send`, `GET /api/s
 Public-room safeguards: 280-char messages (rejected, not truncated), layered fixed-window
 rate limits — burst + sustained per user for typing checks / sends / reactions, per IP for
 typing checks / sends / joins so clearing cookies doesn't reset them — a room-wide budget of
-Jev calls per 30 minutes (only real upstream calls count; skipped and cached drafts are free;
+Jev calls per day (only real upstream calls count; skipped and cached drafts are free;
 when it runs out the room answers 503 "cooling down" instead of calling Jev), a cap on
 in-flight Jev calls per instance, bounded history, and an exact-state Jev cache. With Redis, users,
 messages, hall of fame, presence, rate limits and Jev stats are all shared, so any number of instances serve the same room.
 
 ---
 
-Made with 💖 · [Built by Devin](https://builtbydevin.ai/)
+Made with 💖 · [Built with Devin](https://builtbydevin.ai/)

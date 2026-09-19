@@ -44,6 +44,7 @@ body {
 }
 a { color: inherit; }
 button, input, textarea { font: inherit; color: inherit; }
+button { touch-action: manipulation; -webkit-tap-highlight-color: transparent; }
 h1, h2 { margin: 0 0 0.4rem; letter-spacing: 0.01em; }
 h2 { font-size: 1.05rem; }
 
@@ -89,6 +90,9 @@ h2 { font-size: 1.05rem; }
 .debug-toggle input:checked + .switch { background: #39ff14; }
 .debug-toggle input:checked + .switch::after { transform: translateX(1.5rem); }
 
+/* phone-only: the rail folds into a bottom sheet behind this pill */
+.rail-toggle, .rail-head, .rail-backdrop { display: none; }
+
 /* ---------------------------------------------------------------- layout */
 .layout {
   display: grid; grid-template-columns: minmax(0, 1fr) 280px; gap: 1rem;
@@ -106,42 +110,52 @@ h2 { font-size: 1.05rem; }
 
 .msg { display: grid; grid-template-columns: auto minmax(0, 1fr); gap: 0.6rem; align-items: start; animation: pop 0.35s cubic-bezier(0.2, 1.4, 0.4, 1); }
 @keyframes pop { from { transform: scale(0.85) translateY(10px); opacity: 0; } }
+/* --tint is chosen per author (hash of name+emoji) so one person always gets one color */
+.msg { --tint: var(--pink); }
+.msg[data-tint="1"] { --tint: var(--mint); }
+.msg[data-tint="2"] { --tint: var(--lilac); }
+.msg[data-tint="3"] { --tint: var(--sky); }
+.msg[data-tint="4"] { --tint: var(--peach); }
 .msg .avatar {
   width: 2.7rem; height: 2.7rem; display: grid; place-items: center; font-size: 1.6rem;
-  background: var(--lemon); border: 2px solid var(--line); border-radius: 50%;
+  background: var(--tint); border: 2px solid var(--line); border-radius: 50%;
 }
-.msg:nth-child(3n) .avatar { background: var(--sky); }
-.msg:nth-child(3n + 1) .avatar { background: var(--peach); }
-.msg .bubble { background: var(--pink); border: 2px solid var(--line); border-radius: 4px 20px 20px 20px; padding: 0.55rem 0.9rem; position: relative; }
-.msg:nth-child(3n) .bubble { background: var(--lilac); }
-.msg:nth-child(3n + 1) .bubble { background: var(--mint); }
+.msg .bubble { background: var(--tint); border: 2px solid var(--line); border-radius: 4px 20px 20px 20px; padding: 0.55rem 0.9rem; position: relative; }
 .msg.mine .bubble { background: var(--lemon); }
 .msg .meta { display: flex; gap: 0.6rem; align-items: baseline; font-size: 0.85rem; }
-.msg .name { font-weight: 700; }
+.msg .name { font-weight: 700; min-width: 0; overflow-wrap: anywhere; }
 .msg .time { color: var(--muted); }
 .msg .nice-badge { margin-left: auto; font-size: 0.8rem; padding: 0.05rem 0.5rem; background: var(--paper); border: 2px solid var(--line); border-radius: 999px; white-space: nowrap; }
 .msg .text { margin: 0.15rem 0 0; font-size: 1.05rem; overflow-wrap: anywhere; }
 .msg .probs { display: none; }
 
 /* reactions */
-.msg .reacts { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+.msg .reacts { display: flex; justify-content: flex-end; gap: 0.35rem; margin-top: 0.4rem; }
+/* gray ghost until you click it; lights up in color once it's yours */
 .react {
   display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.1rem 0.55rem; min-width: 2.2rem;
-  background: var(--paper); border: 2px solid var(--line); border-radius: 999px; cursor: pointer;
-  font-size: 0.85rem; line-height: 1.3; transition: transform 0.15s, background 0.15s;
+  background: transparent; border: 2px solid var(--muted); border-radius: 999px; cursor: pointer;
+  color: var(--muted); filter: grayscale(1); opacity: 0.55;
+  font-size: 0.85rem; line-height: 1.3; transition: transform 0.15s, background 0.15s, opacity 0.15s, filter 0.15s;
 }
-.react:hover { transform: translateY(-1px) scale(1.06); }
+@media (hover: hover) { .react:hover { transform: translateY(-1px) scale(1.06); opacity: 0.85; } }
 .react:disabled { cursor: progress; }
 .react .n { font-weight: 700; font-size: 0.8rem; }
 .react .n:empty { display: none; }
-.react.on { background: var(--lemon); border-color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.react.has { opacity: 0.8; }
+.react.on { background: var(--lemon); border-color: var(--ink); color: var(--ink); filter: none; opacity: 1; box-shadow: 0 2px 0 var(--ink); }
 .react.pop .e { animation: react-pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1); display: inline-block; }
 @keyframes react-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.5) rotate(-10deg); } 100% { transform: scale(1); } }
 
 /* ---------------------------------------------------------------- composer */
 .composer { border-top: 2px solid var(--line); padding: 0.8rem 1rem 0.9rem; background: var(--glass); }
 .compose-row { display: flex; gap: 0.7rem; align-items: flex-end; }
-.me-emoji { font-size: 2rem; line-height: 1; padding-bottom: 0.4rem; }
+/* your emoji doubles as the "change my look" button */
+.me-emoji { position: relative; font-size: 2rem; line-height: 1; padding: 0 0 0.4rem; background: none; border: 0; cursor: pointer; font-family: inherit; transition: transform 0.15s; }
+.me-emoji:disabled { cursor: default; }
+.me-emoji::after { content: "✏️"; position: absolute; right: -0.35rem; bottom: 0.2rem; font-size: 0.8rem; line-height: 1; opacity: 0; transition: opacity 0.15s; }
+.me-emoji:not(:disabled):hover, .me-emoji:focus-visible { transform: scale(1.12) rotate(-8deg); }
+.me-emoji:not(:disabled):hover::after, .me-emoji:focus-visible::after { opacity: 1; }
 #draft {
   flex: 1; resize: none; min-height: 3.2rem; max-height: 9rem; padding: 0.7rem 1rem; font-size: 1.15rem;
   border: 2px solid var(--line); border-radius: 18px; background: var(--paper); outline: none;
@@ -153,14 +167,14 @@ h2 { font-size: 1.05rem; }
   background: var(--good); border: 2px solid var(--line); border-radius: 18px; box-shadow: var(--shadow);
   transition: transform 0.1s, background 0.2s;
 }
-.send:hover:not(:disabled) { transform: translateY(-2px); }
+@media (hover: hover) { .send:hover:not(:disabled) { transform: translateY(-2px); } }
 .send:active:not(:disabled) { transform: translateY(3px); box-shadow: none; }
 .send:disabled { background: #e3dfe9; color: var(--muted); cursor: not-allowed; box-shadow: none; }
 .send.pending { background: var(--meh); }
 .send.blocked { background: var(--bad); color: #fff; }
 
 /* the wiggle: amplitude, rotation and duration scale with how mean the message is */
-.send.wiggle { animation: wiggle var(--wiggle-dur) cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.send.wiggle, .join-btn.wiggle { animation: wiggle var(--wiggle-dur) cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
 @keyframes wiggle {
   0%, 100% { transform: translateX(0) rotate(0); }
   10% { transform: translateX(calc(-1 * var(--amp))) rotate(calc(-1 * var(--rot))); }
@@ -194,9 +208,12 @@ body.quake::after { content: ""; position: fixed; inset: 0; pointer-events: none
 .chars.over { color: var(--bad); font-weight: 700; }
 .verdict.thinking .verdict-face { animation: think 0.8s linear infinite; }
 @keyframes think { to { transform: rotate(360deg); } }
-.reasons { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
+/* plain text tips, not pills — pills read like chat bubbles */
+.reasons { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.3rem; margin: 0.3rem 0 0 0.2rem; font-size: 0.85rem; color: var(--muted); }
 .reasons:empty { display: none; }
-.chip { font-size: 0.85rem; padding: 0.1rem 0.7rem; border: 2px solid var(--line); border-radius: 999px; background: var(--peach); }
+.reasons::before { content: "tips:"; font-weight: 700; margin-right: 0.15rem; }
+.tip { color: #b5485f; font-weight: 700; }
+.tip + .tip::before { content: "·"; color: var(--muted); font-weight: 400; margin-right: 0.3rem; }
 
 /* ---------------------------------------------------------------- rail */
 .hint, .how { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0; }
@@ -230,7 +247,11 @@ body.debug .prob.detail { display: grid; }
 /* ---------------------------------------------------------------- join */
 .modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(59, 47, 74, 0.35); backdrop-filter: blur(6px); z-index: 10; }
 .modal.hidden { display: none; }
-.join { width: min(440px, 100%); padding: 1.6rem 1.8rem; background: var(--lemon); animation: pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.join { position: relative; width: min(440px, 100%); padding: 1.6rem 1.8rem; background: var(--lemon); animation: pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.join-close { position: absolute; top: 0.7rem; right: 0.8rem; width: 2rem; height: 2rem; border: 2px solid var(--line); border-radius: 50%; background: var(--paper); font-family: inherit; font-weight: 700; cursor: pointer; }
+.join-close.hidden { display: none; }
+.join-err .reasons { display: inline-flex; margin: 0 0 0 0.3rem; vertical-align: baseline; }
+.join-err .reasons::before { content: "—"; font-weight: 400; }
 .join h1 { font-size: 2rem; text-shadow: 2px 2px 0 var(--pink); }
 .join-sub { margin: 0 0 1rem; color: var(--ink); }
 .field { display: block; margin-bottom: 1rem; }
@@ -240,7 +261,7 @@ body.debug .prob.detail { display: grid; }
 .shuffle { font-size: 0.8rem; padding: 0.15rem 0.7rem; border: 2px solid var(--line); border-radius: 999px; background: var(--paper); cursor: pointer; }
 .emoji-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(2.6rem, 1fr)); gap: 0.35rem; max-height: 11rem; overflow-y: auto; padding: 0.35rem; background: var(--paper); border: 2px solid var(--line); border-radius: 16px; }
 .emoji-grid button { font-size: 1.5rem; line-height: 1; padding: 0.3rem 0; border: 2px solid transparent; border-radius: 12px; background: transparent; cursor: pointer; transition: transform 0.1s; }
-.emoji-grid button:hover { transform: scale(1.2); background: var(--sky); }
+@media (hover: hover) { .emoji-grid button:hover { transform: scale(1.2); background: var(--sky); } }
 .emoji-grid button[aria-checked="true"] { border-color: var(--line); background: var(--pink); }
 .join-preview { display: flex; align-items: center; gap: 0.5rem; font-size: 1.3rem; font-weight: 700; margin-bottom: 1rem; }
 .pv-emoji { font-size: 2rem; }
@@ -304,24 +325,148 @@ body.debug .prob.hot .bar i { background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; 
 body.debug .stats dl div { background: #030503; }
 body.debug .toast { background: #39ff14; color: #050805; text-shadow: none; }
 body.debug .nice-badge { background: #030503; }
-body.debug .react { background: #030503; border-radius: 4px; }
-body.debug .react.on { background: #123312; border-color: #39ff14; box-shadow: 0 0 8px #39ff14; }
+body.debug .tip { color: #ff3b3b; }
+body.debug .react { background: #030503; border-color: #1f5f1f; color: #6fbf6f; border-radius: 4px; }
+body.debug .react.on { background: #123312; border-color: #39ff14; color: #39ff14; box-shadow: 0 0 8px #39ff14; }
 body.debug .debug-toggle input:checked + .switch::after { background: #050805; }
 body.debug .modal { background: rgba(0, 0, 0, 0.8); }
 body.debug .join { background: var(--paper); }
 
-/* narrow screens (after debugger rules so they win) */
-@media (max-width: 560px) {
-  html { font-size: 13px; }
-  .layout { padding: 0.4rem 0.6rem 0.8rem; }
-  .compose-row { flex-wrap: wrap; }
-  #draft { flex-basis: 100%; }
-  .send { margin-left: auto; }
+/* ================================================================ PHONES
+   (after the debugger rules so they win). Portrait phones by width; landscape phones by height + touch.
+   The thread + composer fill the visual viewport, the rail folds into a bottom sheet and the live Jev
+   read becomes a scrolling strip above the composer. app.js mirrors this query in MOBILE. */
+@media (max-width: 640px), ((max-height: 520px) and (pointer: coarse)) {
+  html { font-size: 14px; overflow: hidden; }
+  body {
+    display: flex; flex-direction: column;
+    height: 100dvh;
+    height: var(--vvh, 100vh);          /* visual viewport height, kept fresh by app.js */
+    min-height: 0; overflow: hidden; overscroll-behavior: none;
+    transform: translateY(var(--vvt, 0px)); /* iOS pans instead of resizing for the keyboard; follow it */
+  }
+  .blobs { overflow: hidden; } /* body is now the containing block for fixed children; keep the blobs from widening it */
+
+  /* header: one compact row */
+  .top {
+    flex-wrap: nowrap; gap: 0.5rem; flex-shrink: 0;
+    padding: calc(0.35rem + env(safe-area-inset-top)) max(0.7rem, env(safe-area-inset-right)) 0.3rem max(0.7rem, env(safe-area-inset-left));
+  }
+  .brand { min-width: 0; gap: 0.35rem; align-items: center; }
+  .brand-heart { font-size: 1.3rem; }
+  .brand-name { font-size: 1.35rem; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .brand-tag, .faces, .presence-word, .debug-label { display: none; }
+  .top-right { flex-wrap: nowrap; flex-shrink: 0; gap: 0.5rem; }
+  .presence { padding: 0.3rem 0.65rem; font-size: 0.95rem; }
+  .debug-toggle { min-height: 44px; }
+  .rail-toggle {
+    display: inline-flex; align-items: center; justify-content: center; min-width: 44px; min-height: 44px; padding: 0 0.5rem;
+    font-size: 1.25rem; line-height: 1; background: var(--lemon); border: 2px solid var(--line); border-radius: 999px; cursor: pointer;
+  }
+  .rail-toggle[aria-expanded="true"] { background: var(--pink); }
+
+  /* the chat fills whatever is left */
+  .layout {
+    flex: 1; min-height: 0; height: auto; display: grid; grid-template-columns: minmax(0, 1fr);
+    max-width: none; width: 100%; gap: 0;
+    padding: 0.25rem max(0.5rem, env(safe-area-inset-right)) 0.35rem max(0.5rem, env(safe-area-inset-left));
+  }
+  .chat { height: auto; min-height: 0; }
+  .thread { padding: 0.7rem 0.6rem; gap: 0.6rem; overscroll-behavior: contain; }
+  .thread-hello .big { font-size: 2.2rem; }
+  .thread-hello p { font-size: 0.95rem; }
+  .msg { gap: 0.45rem; }
   .msg .avatar { width: 2.2rem; height: 2.2rem; font-size: 1.3rem; }
   .msg .bubble { padding: 0.5rem 0.7rem; }
-  .prob, .live .prob, body.debug .msg .probs .prob {
-    grid-template-columns: 1fr 3rem; grid-template-areas: "lbl val" "bar bar"; row-gap: 0.1rem;
+  .msg .meta { flex-wrap: wrap; gap: 0.2rem 0.5rem; }
+  .msg .text { font-size: 1rem; }
+
+  /* rail → bottom sheet */
+  .rail {
+    position: fixed; left: 0; right: 0; bottom: 0; z-index: 15; max-height: 80%;
+    overflow-y: auto; overscroll-behavior: contain; gap: 0.7rem;
+    padding: 0.5rem 0.8rem calc(0.8rem + env(safe-area-inset-bottom));
+    background: var(--bg); border: 2px solid var(--line); border-bottom: 0; border-radius: 22px 22px 0 0;
+    box-shadow: 0 -8px 30px rgba(59, 47, 74, 0.25);
+    transform: translateY(105%); visibility: hidden;
+    transition: transform 0.28s cubic-bezier(0.2, 1, 0.4, 1), visibility 0s 0.28s;
   }
+  .rail.open { transform: none; visibility: visible; transition: transform 0.28s cubic-bezier(0.2, 1, 0.4, 1); }
+  .rail-head { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; font-weight: 700; }
+  .rail-close {
+    min-width: 44px; min-height: 44px; display: grid; place-items: center;
+    background: var(--paper); border: 2px solid var(--line); border-radius: 999px; font-size: 1rem; cursor: pointer;
+  }
+  .rail-backdrop { display: block; position: fixed; inset: 0; z-index: 14; background: rgba(59, 47, 74, 0.35); opacity: 0; pointer-events: none; transition: opacity 0.25s; }
+  .rail-backdrop.show { opacity: 1; pointer-events: auto; }
+  body.debug .rail { border-radius: 10px 10px 0 0; box-shadow: 0 -8px 30px rgba(57, 255, 20, 0.2); }
+  body.debug .rail-backdrop { background: rgba(0, 0, 0, 0.7); }
+
+  /* live Jev read → horizontal strip of chips above the composer (app.js moves it into .chat) */
+  .live {
+    flex-shrink: 0; border: 0; border-top: 2px solid var(--line); border-radius: 0; box-shadow: none;
+    background: var(--glass); padding: 0.4rem 0.6rem 0.3rem;
+  }
+  .live.empty, .live h2, .live .hint { display: none; }
+  .live .probs { display: flex; gap: 0.4rem; margin: 0; padding-bottom: 0.3rem; overflow-x: auto; scrollbar-width: thin; }
+  .live .prob {
+    flex: 0 0 auto; width: 6.6rem; grid-template-columns: minmax(0, 1fr) auto; grid-template-areas: "lbl val" "bar bar";
+    row-gap: 0.15rem; column-gap: 0.3rem; font-size: 0.7rem; padding: 0.25rem 0.5rem;
+    border: 2px solid var(--line); border-radius: 12px; background: var(--paper);
+  }
+  .live .prob.hot { background: var(--peach); }
+  .live .prob .lbl { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+  .live .prob.group { width: auto; grid-template-columns: 1fr; grid-template-areas: none; border: 0; background: none; padding: 0.25rem 0.1rem; margin: 0; align-self: center; white-space: nowrap; }
+  .live-meta { font-size: 0.75rem; margin-top: 0.1rem; overflow-wrap: anywhere; }
+
+  /* per-message probabilities (debugger): stack label/value over the bar */
+  .prob, body.debug .msg .probs .prob { grid-template-columns: 1fr 3rem; grid-template-areas: "lbl val" "bar bar"; row-gap: 0.1rem; }
   .prob .lbl { grid-area: lbl; } .prob .val { grid-area: val; text-align: right; } .prob .bar { grid-area: bar; }
-  .prob.group, .live .prob.group { grid-template-columns: 1fr; grid-template-areas: none; }
+  .prob.group { grid-template-columns: 1fr; grid-template-areas: none; }
+
+  /* composer: one row, 16px text so iOS doesn't zoom, sits above the keyboard */
+  .composer { padding: 0.5rem 0.6rem calc(0.55rem + env(safe-area-inset-bottom)); }
+  .compose-row { flex-wrap: nowrap; gap: 0.45rem; }
+  .me-emoji { font-size: 1.6rem; padding-bottom: 0.6rem; }
+  #draft { flex: 1 1 auto; min-width: 0; font-size: 16px; min-height: 44px; max-height: 7.5rem; padding: 0.55rem 0.8rem; }
+  .send { margin-left: 0; flex-shrink: 0; min-height: 44px; padding: 0.6rem 0.9rem; font-size: 1.05rem; white-space: nowrap; }
+  .verdict { gap: 0.5rem; margin-top: 0.4rem; min-height: 1.8rem; }
+  .verdict-face { font-size: 1.5rem; }
+  .meter { width: 72px; }
+  .verdict-text { font-size: 0.85rem; min-width: 0; }
+
+  /* footer: tiny, but still there */
+  .foot { flex-shrink: 0; gap: 0.4rem; padding: 0 0.5rem calc(0.15rem + env(safe-area-inset-bottom)); font-size: 0.72rem; }
+  .foot img { height: 18px; }
+  .toast { bottom: 6.5rem; }
+
+  /* join card: fits, scrolls inside the modal when the keyboard eats the screen */
+  .modal { display: flex; padding: max(0.6rem, env(safe-area-inset-top)) 0.6rem max(0.6rem, env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }
+  .modal.hidden { display: none; }
+  .join { margin: auto; width: 100%; padding: 1rem 1rem 0.8rem; }
+  .join h1 { font-size: 1.6rem; }
+  .join-sub { font-size: 0.9rem; margin-bottom: 0.7rem; }
+  .field { margin-bottom: 0.7rem; }
+  .field > span { flex-wrap: wrap; gap: 0.3rem; }
+  .field input { font-size: 16px; padding: 0.6rem 0.9rem; }
+  .emoji-grid { max-height: 8.6rem; grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); gap: 0.25rem; }
+  .emoji-grid button { min-height: 44px; padding: 0; }
+  .join-preview { margin-bottom: 0.7rem; font-size: 1.15rem; }
+  .pv-emoji { font-size: 1.7rem; }
+  .join-btn { position: sticky; bottom: 0.2rem; z-index: 1; min-height: 48px; padding: 0.7rem; font-size: 1.15rem; }
+  .join-fine { font-size: 0.72rem; }
+}
+
+/* ================================================================ TOUCH
+   Fingers, not cursors: every control gets a ≥44px hit area (the small pills via an invisible halo). */
+@media (pointer: coarse) {
+  .react { position: relative; padding: 0.4rem 0.75rem; min-width: 2.8rem; font-size: 0.95rem; }
+  .react::before { content: ""; position: absolute; inset: -7px; border-radius: inherit; }
+  .msg .reacts { gap: 0.7rem; margin-top: 0.5rem; }
+  .shuffle { position: relative; padding: 0.45rem 0.9rem; }
+  .shuffle::before { content: ""; position: absolute; inset: -7px; }
+  .emoji-grid { grid-template-columns: repeat(auto-fill, minmax(44px, 1fr)); }
+  .emoji-grid button { min-height: 44px; }
+  .debug-toggle { min-height: 44px; }
+  .send, .join-btn { min-height: 44px; }
 }
