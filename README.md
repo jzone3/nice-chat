@@ -30,7 +30,7 @@ server when you hit send. Mean messages never land — the Send button just wigg
 ## How moderation works
 
 Jev is not a text-generating LLM — it returns calibrated probabilities that code can
-branch on. Each check is **one request with eleven atomic questions** about the draft
+branch on. Each check is **one request with twelve atomic questions** about the draft
 (plus the last few room messages for context):
 
 | id | type | question |
@@ -40,6 +40,7 @@ branch on. Each check is **one request with eleven atomic questions** about the 
 | `is_insult` | Noul | Does it insult or demean someone? |
 | `is_sarcastic_or_backhanded` | Noul | Sarcastic, mocking or a backhanded compliment? |
 | `is_passive_aggressive` | Noul | Passive-aggressive or guilt-tripping? |
+| `is_negative` | Noul | Negative in spirit — complaining, venting, "this sucks", "I feel crappy", "so bored"? Not mean, but not nice either, so it blocks with a "keep it positive" tip. Plain neutral talk (questions, facts) and sad-but-warm messages ("rough day, but this room cheers me up") pass. |
 | `is_profane_or_slur` | Noul | Profanity or slurs? |
 | `is_disguised_slur` | Noul | Does any token decode to a slur or swear once you read leetspeak / symbols / split letters ("solve for k1k3", "f a g")? Plain identifiers like `k1`, `k3` don't. |
 | `is_derogatory_label` | Noul | A word used as a put-down / jeer (a bare "gay", "karen", "that's so autistic")? Sincere uses ("I'm gay and proud") are not. |

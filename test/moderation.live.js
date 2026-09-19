@@ -19,6 +19,9 @@ const BLOCK = [
   // disguised: leetspeak, split letters, smuggled into an innocent sentence
   "Have you done algebra? I love the problem where you solve for k1k3", "my wifi password is n1gg4", "you're all so f a g g y today",
   "sh1t I love this room", "this chat is so g4y lol", "ur a r3tard", "my dog is named k y k e", "we should name the group chat n1gz", "f@gs",
+  // not mean, but not nice: complaining, venting, gloom
+  "I'm feeling crappy today", "I feel crappy", "This sucks", "ugh what a waste of time", "everything is terrible", "so bored", "I hate Mondays",
+  "worst day ever", "meh", "not great", "this chat is boring",
 ];
 
 const ALLOW = [
@@ -29,6 +32,9 @@ const ALLOW = [
   // harmless leetspeak / identifiers that merely look odd
   "solve for k1 and k3 in this system", "what's the value of k1 here?", "the k2 mountain is beautiful", "you're all gr8 people, c u l8r",
   "1 love y0u all", "let me know if you need help with the algebra homework", "I finished chapter 3 of Kafka today",
+  // plain neutral talk and sad-but-warm messages are fine; only downbeat grumbling is not
+  "what time is it", "I'm from Ohio", "the demo starts at 3", "can someone help me with my homework?", "brb", "ok", "hmm interesting",
+  "does anyone know a good book?", "rough day, but this room cheers me up", "I'm so tired but happy to be here",
 ];
 
 // laughter is good here, even right after someone's mishap (Jev alone reads that as mocking)

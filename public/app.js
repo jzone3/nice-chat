@@ -27,6 +27,7 @@
     is_insult: "insult",
     is_sarcastic_or_backhanded: "sarcasm",
     is_passive_aggressive: "passive-aggr.",
+    is_negative: "negative",
     is_profane_or_slur: "profanity/slur",
     is_disguised_slur: "disguised slur",
     is_derogatory_label: "put-down label",

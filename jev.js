@@ -46,6 +46,14 @@ const QUESTIONS = {
       false: "Direct and sincere, no hidden dig",
     },
   },
+  is_negative: {
+    type: "noul",
+    instructions: "Is `draft_message` negative in spirit — complaining, venting, gloom, disgust, boredom or declaring that something is bad, sucks or is a waste — even when nobody is attacked?",
+    criteria: {
+      true: "Downbeat or grumbling: 'this sucks', 'I feel crappy today', 'ugh, what a waste of time', 'everything is terrible', 'so bored', 'I hate Mondays', 'worst day ever'",
+      false: "Upbeat, appreciative or plainly neutral: greetings, questions, facts, logistics, jokes, 'what time is it', 'I'm from Ohio', 'the demo starts at 3'; also a sad fact shared with warmth or hope ('rough day, but this room cheers me up')",
+    },
+  },
   is_profane_or_slur: {
     type: "noul",
     instructions: "Does `draft_message` contain profanity, obscenity or a slur?",
@@ -190,6 +198,7 @@ const THRESHOLDS = {
   has_link: 0.5,
   is_sarcastic_or_backhanded: 0.6,
   is_passive_aggressive: 0.65,
+  is_negative: 0.7, // complaining/venting is not mean, but it is not nice either
   hostile_tone_min_prob: 0.55, // tone == hostile with at least this probability
   cold_tone_min_prob: 0.75, // very confidently cold also blocks
   niceness_min: 2.5, // score below this blocks even if no flag fired
@@ -214,6 +223,7 @@ const REASON_LABELS = {
   has_link: "no links, please",
   is_sarcastic_or_backhanded: "sounds sarcastic",
   is_passive_aggressive: "a bit passive-aggressive",
+  is_negative: "keep it positive",
   hostile: "hostile tone",
   cold: "pretty cold",
   low_niceness: "not quite nice enough",
@@ -348,6 +358,7 @@ function decide(answers) {
     toneProbs.hostile ?? 0,
     0.8 * (flags.is_sarcastic_or_backhanded ?? 0),
     0.7 * (flags.is_passive_aggressive ?? 0),
+    0.35 * (flags.is_negative ?? 0),
     (flags.has_link ?? 0) >= THRESHOLDS.has_link ? LINK_MEANNESS : 0
   );
 
