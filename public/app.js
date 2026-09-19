@@ -182,7 +182,7 @@
   let welcomeOpener = null;
   function openWelcome(opener = null) {
     welcomeOpener = opener;
-    el.welcomeWho.textContent = me ? `${me.emoji} ${me.name}` : "friend";
+    el.welcomeWho.textContent = me ? me.name : "friend";
     for (const n of behindWelcome()) n.inert = true;
     el.welcome.classList.remove("hidden");
     el.welcomeOk.focus();
