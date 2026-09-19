@@ -203,9 +203,12 @@ body.quake::after { content: ""; position: fixed; inset: 0; pointer-events: none
 .chars.over { color: var(--bad); font-weight: 700; }
 .verdict.thinking .verdict-face { animation: think 0.8s linear infinite; }
 @keyframes think { to { transform: rotate(360deg); } }
-.reasons { display: flex; gap: 0.4rem; flex-wrap: wrap; margin-top: 0.4rem; }
+/* plain text tips, not pills — pills read like chat bubbles */
+.reasons { display: flex; flex-wrap: wrap; align-items: baseline; gap: 0 0.3rem; margin: 0.3rem 0 0 0.2rem; font-size: 0.85rem; color: var(--muted); }
 .reasons:empty { display: none; }
-.chip { font-size: 0.85rem; padding: 0.1rem 0.7rem; border: 2px solid var(--line); border-radius: 999px; background: var(--peach); }
+.reasons::before { content: "tips:"; font-weight: 700; margin-right: 0.15rem; }
+.tip { color: #b5485f; font-weight: 700; }
+.tip + .tip::before { content: "·"; color: var(--muted); font-weight: 400; margin-right: 0.3rem; }
 
 /* ---------------------------------------------------------------- rail */
 .hint, .how { color: var(--muted); font-size: 0.85rem; margin: 0.2rem 0 0; }
@@ -313,6 +316,7 @@ body.debug .prob.hot .bar i { background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; 
 body.debug .stats dl div { background: #030503; }
 body.debug .toast { background: #39ff14; color: #050805; text-shadow: none; }
 body.debug .nice-badge { background: #030503; }
+body.debug .tip { color: #ff3b3b; }
 body.debug .react { background: #030503; border-color: #1f5f1f; color: #6fbf6f; border-radius: 4px; }
 body.debug .react.on { background: #123312; border-color: #39ff14; color: #39ff14; box-shadow: 0 0 8px #39ff14; }
 body.debug .debug-toggle input:checked + .switch::after { background: #050805; }

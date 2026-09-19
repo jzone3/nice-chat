@@ -398,7 +398,7 @@
       el.send.classList.add("blocked");
       el.sendLabel.textContent = "Nope";
       el.sendEmoji.textContent = "🙈";
-      el.reasons.replaceChildren(...(v.reasons || []).map((r) => { const c = document.createElement("span"); c.className = "chip"; c.textContent = r; return c; }));
+      el.reasons.replaceChildren(...(v.reasons || []).map((r) => { const c = document.createElement("span"); c.className = "tip"; c.textContent = r; return c; }));
     }
   }
 
