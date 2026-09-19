@@ -10,16 +10,24 @@
     sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"),
     modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
     pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
+    joinClose: $("join-close"), joinTitle: $("join-title"), joinSub: $("join-sub"),
     toast: $("toast"),
+    chat: document.querySelector(".chat"), rail: $("rail"), live: $("live"),
+    railToggle: $("rail-toggle"), railClose: $("rail-close"), railBackdrop: $("rail-backdrop"),
   };
+  // Mirrors the phone media query in style.css.
+  const MOBILE = matchMedia("(max-width: 640px), ((max-height: 520px) and (pointer: coarse))");
+  const COARSE = matchMedia("(pointer: coarse)");
 
   const EMOJIS = "😀 😎 🥳 🤩 😇 🥰 🤠 🤓 🧐 🥸 😺 🐶 🦊 🐼 🐨 🦁 🐸 🐙 🦄 🐝 🦋 🐢 🐧 🦖 🌈 🌸 🌻 🍀 🌙 ⭐ 🔥 🍕 🍩 🧁 🍓 🥑 🎈 🎨 🎸 🚀 🛸 🧸 🪐 🍄 🐳 🦥 🦩 🫧".split(" ");
   const FLAG_LABELS = {
     is_kind: "kind",
+    is_laughter: "laughter",
     is_insult: "insult",
     is_sarcastic_or_backhanded: "sarcasm",
     is_passive_aggressive: "passive-aggr.",
     is_profane_or_slur: "profanity/slur",
+    is_disguised_slur: "disguised slur",
     is_derogatory_label: "put-down label",
     is_hateful: "hateful",
     is_harassment_or_threat: "harass/threat",
@@ -37,6 +45,12 @@
   // ------------------------------------------------------------ utils
   const fmtTime = (ts) => new Date(ts).toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
   const pct = (p) => `${Math.round((p ?? 0) * 100)}%`;
+  const TINTS = 5;
+  const tintOf = (key) => {
+    let h = 5381;
+    for (const ch of key) h = ((h * 33) ^ ch.codePointAt(0)) >>> 0;
+    return h % TINTS;
+  };
   const words = (s) => s.trim().split(/\s+/).filter(Boolean).length;
 
   function toast(msg, ms = 2200) {
@@ -117,31 +131,62 @@
   renderGrid();
   preview();
 
+  // The same card joins and edits: with an account it opens pre-filled as "change your look".
+  function openJoin(editing) {
+    el.joinTitle.textContent = editing ? "✏️ Change your look" : "💖 Nice Chat";
+    el.joinSub.textContent = editing ? "New name, new emoji, or both. Jev checks names too." : "One big room. Everyone in the world. Only nice messages get through.";
+    el.joinBtn.textContent = editing ? "Save ✨" : "Join the chat 🎉";
+    el.joinClose.classList.toggle("hidden", !editing);
+    el.joinErr.replaceChildren();
+    if (editing) { el.joinName.value = me.name; pickedEmoji = me.emoji; renderGrid(); preview(); }
+    el.modal.classList.remove("hidden");
+    el.joinName.focus();
+  }
+  el.meEmoji.onclick = () => { if (me) openJoin(true); };
+  el.joinClose.onclick = () => { if (me) el.modal.classList.add("hidden"); };
+  el.modal.addEventListener("keydown", (e) => { if (e.key === "Escape" && me) el.modal.classList.add("hidden"); });
+
+  function joinError(data) {
+    el.joinErr.replaceChildren(document.createTextNode(data.error || "Hmm, try again"));
+    if (data.reasons?.length) {
+      const tips = document.createElement("span");
+      tips.className = "reasons";
+      tips.replaceChildren(...data.reasons.map((r) => { const c = document.createElement("span"); c.className = "tip"; c.textContent = r; return c; }));
+      el.joinErr.append(tips);
+    }
+  }
+
   el.joinForm.onsubmit = async (e) => {
     e.preventDefault();
-    el.joinErr.textContent = "";
+    el.joinErr.replaceChildren();
     el.joinBtn.disabled = true;
+    const editing = Boolean(me);
     try {
       const { ok, data } = await api("/api/join", { name: el.joinName.value, emoji: pickedEmoji });
-      if (!ok) { el.joinErr.textContent = data.error || "Hmm, try again"; return; }
+      if (!ok) { joinError(data); if (data.blocked) wiggle(0.8, el.joinBtn); return; }
       enter(data.user);
-      connect(); // reconnect so the stream carries our identity for presence
-      toast(`Welcome, ${data.user.emoji} ${data.user.name}!`);
+      if (!editing) connect(); // reconnect so the stream carries our identity for presence
+      toast(editing ? `You're now ${data.user.emoji} ${data.user.name}` : `Welcome, ${data.user.emoji} ${data.user.name}!`);
     } catch {
-      el.joinErr.textContent = "Couldn't reach the server — try again";
+      joinError({ error: "Couldn't reach the server — try again" });
     } finally {
       el.joinBtn.disabled = false;
     }
   };
 
+  // Every look this tab has worn, so messages sent under an old name stay "mine" after a change.
+  const myLooks = new Set();
+  const isMine = (m) => myLooks.has(`${m.name}\u0000${m.emoji}`);
   function enter(user) {
     me = user;
+    myLooks.add(`${me.name}\u0000${me.emoji}`);
     el.modal.classList.add("hidden");
     el.meEmoji.textContent = user.emoji;
+    el.meEmoji.disabled = false;
     el.draft.disabled = false;
     el.send.disabled = false;
     el.draft.focus();
-    for (const m of el.thread.querySelectorAll(".msg")) m.classList.toggle("mine", m.dataset.name === me.name && m.dataset.emoji === me.emoji);
+    for (const m of el.thread.querySelectorAll(".msg")) m.classList.toggle("mine", isMine(m.dataset));
   }
 
   // ------------------------------------------------------------ realtime
@@ -232,11 +277,12 @@
     el.hello.style.display = "none";
     const stick = nearBottom();
     const node = document.createElement("article");
-    node.className = "msg" + (me && m.name === me.name && m.emoji === me.emoji ? " mine" : "");
+    node.className = "msg" + (isMine(m) ? " mine" : "");
     node.dataset.id = m.id || "";
     node.dataset.ts = m.ts;
     node.dataset.name = m.name;
     node.dataset.emoji = m.emoji;
+    node.dataset.tint = tintOf(`${m.name}\u0000${m.emoji}`);
     node.innerHTML = `
       <div class="avatar"></div>
       <div class="bubble">
@@ -286,6 +332,7 @@
         const r = rx[b.dataset.emoji];
         if (!r || typeof r !== "object") continue;
         b.querySelector(".n").textContent = r.n > 0 ? r.n : "";
+        b.classList.toggle("has", r.n > 0);
         if (r.me !== undefined) b.classList.toggle("on", r.me);
       }
     }
@@ -383,7 +430,7 @@
       el.send.classList.add("blocked");
       el.sendLabel.textContent = "Nope";
       el.sendEmoji.textContent = "🙈";
-      el.reasons.replaceChildren(...(v.reasons || []).map((r) => { const c = document.createElement("span"); c.className = "chip"; c.textContent = r; return c; }));
+      el.reasons.replaceChildren(...(v.reasons || []).map((r) => { const c = document.createElement("span"); c.className = "tip"; c.textContent = r; return c; }));
     }
   }
 
@@ -392,9 +439,11 @@
       el.liveProbs.replaceChildren();
       el.liveMeta.textContent = "";
       el.liveHint.style.display = "";
+      el.live.classList.add("empty");
       return;
     }
     el.liveHint.style.display = "none";
+    el.live.classList.remove("empty");
     renderProbs(el.liveProbs, v);
     el.liveMeta.textContent = `${v.allowed ? "ALLOW" : "BLOCK"} · ${v.latency_ms} ms${v.cached ? " · cached" : ""}${v.hits?.length ? " · hits: " + v.hits.join(", ") : ""}`;
   }
@@ -436,20 +485,23 @@
     clearTimeout(judgeTimer);
     judgeTimer = setTimeout(judgeDraft, 380);
   });
+  // Enter sends with a keyboard; on touch devices it inserts a newline and the Send button sends.
   el.draft.addEventListener("keydown", (e) => {
-    if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); el.composer.requestSubmit(); }
+    if (e.key === "Enter" && !e.shiftKey && !COARSE.matches) { e.preventDefault(); el.composer.requestSubmit(); }
   });
 
   // ------------------------------------------------------------ wiggle
   // meanness 0..1 → amplitude 4–30px, rotation 1–12°, duration 0.45–1.1s (+ full-screen quake when it's really mean)
-  function wiggle(meanness = 0.3) {
+  function wiggle(meanness = 0.3, target = el.send) {
     const m = Math.max(0, Math.min(1, meanness));
-    el.send.style.setProperty("--amp", `${(4 + m * 26).toFixed(1)}px`);
-    el.send.style.setProperty("--rot", `${(1 + m * 11).toFixed(1)}deg`);
-    el.send.style.setProperty("--wiggle-dur", `${(0.45 + m * 0.65).toFixed(2)}s`);
-    el.send.classList.remove("wiggle");
-    void el.send.offsetWidth; // restart animation
-    el.send.classList.add("wiggle");
+    target.style.setProperty("--amp", `${(4 + m * 26).toFixed(1)}px`);
+    target.style.setProperty("--rot", `${(1 + m * 11).toFixed(1)}deg`);
+    target.style.setProperty("--wiggle-dur", `${(0.45 + m * 0.65).toFixed(2)}s`);
+    target.classList.remove("wiggle");
+    void target.offsetWidth; // restart animation
+    target.classList.add("wiggle");
+    // drop the class when done, or it replays whenever the element is hidden and shown again (the join card)
+    target.addEventListener("animationend", () => target.classList.remove("wiggle"), { once: true });
     if (m >= 0.85) {
       document.body.classList.remove("quake");
       void document.body.offsetWidth;
@@ -489,7 +541,7 @@
       renderChars();
       latest = null;
       setVerdict(null);
-      renderLive(data);
+      renderLive(MOBILE.matches ? null : data); // the phone strip sits above the composer; the sent message carries its own badge
       renderStats(data.stats);
       if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame); }
       scrollDown(true);
@@ -502,6 +554,38 @@
       el.draft.focus();
     }
   };
+
+  // ------------------------------------------------------------ phones
+  // The live Jev read sits above the composer, the rail folds into a bottom sheet, and the page is sized
+  // to the visual viewport so the composer stays above the on-screen keyboard (iOS pans the viewport
+  // instead of resizing it; --vvt follows that pan).
+  function placeLive() {
+    if (MOBILE.matches) el.chat.insertBefore(el.live, el.composer);
+    else el.rail.insertBefore(el.live, el.rail.querySelector(".fame"));
+  }
+  function openRail(on) {
+    el.rail.classList.toggle("open", on);
+    el.railBackdrop.classList.toggle("show", on);
+    el.railToggle.setAttribute("aria-expanded", String(on));
+  }
+  el.railToggle.onclick = () => openRail(!el.rail.classList.contains("open"));
+  el.railClose.onclick = () => openRail(false);
+  el.railBackdrop.onclick = () => openRail(false);
+
+  const vv = window.visualViewport;
+  function fitViewport() {
+    const root = document.documentElement.style;
+    if (!MOBILE.matches) { root.removeProperty("--vvh"); root.removeProperty("--vvt"); return; }
+    const stick = nearBottom();
+    root.setProperty("--vvh", `${Math.round(vv ? vv.height : innerHeight)}px`);
+    root.setProperty("--vvt", `${Math.round(vv ? vv.offsetTop : 0)}px`);
+    if (stick) scrollDown(true);
+  }
+  (vv || window).addEventListener("resize", fitViewport);
+  vv?.addEventListener("scroll", fitViewport);
+  MOBILE.addEventListener("change", () => { placeLive(); openRail(false); fitViewport(); });
+  placeLive();
+  fitViewport();
 
   // ------------------------------------------------------------ debugger
   const params = new URLSearchParams(location.search);
@@ -543,6 +627,6 @@
     if (data.max_text > 0) el.draft.maxLength = data.max_text;
     connect();
     if (data.user) enter(data.user);
-    else el.modal.classList.remove("hidden");
+    else openJoin(false);
   })();
 })();

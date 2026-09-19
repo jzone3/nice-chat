@@ -6,7 +6,7 @@ const path = require("path");
 process.env.DATA_FILE = path.join(os.tmpdir(), `nice-chat-test-${process.pid}.json`);
 delete process.env.REDIS_URL;
 delete process.env.KV_URL;
-process.env.JEV_BUDGET_30M = "3";
+process.env.JEV_BUDGET_DAY = "3";
 const store = require("../store");
 
 const uid = "00000000-0000-4000-8000-000000000001";
@@ -73,8 +73,15 @@ test("memory store: sustained window keeps biting after the burst window resets"
   assert.equal(await store.allow("judge", who), true);
 });
 
-test("memory store: room-wide jev budget", async () => {
+test("memory store: room-wide jev budget resets at UTC midnight, not 24h after first call", async (t) => {
+  const DAY = 86_400_000;
+  const midnight = Math.ceil(Date.now() / DAY) * DAY; // next UTC midnight
+  t.mock.timers.enable({ apis: ["Date"], now: midnight - 60 * 60_000 }); // 23:00 UTC
   const results = [];
   for (let i = 0; i < 5; i++) results.push(await store.allow("jev", "room"));
   assert.deepEqual(results, [true, true, true, false, false]);
+  t.mock.timers.tick(59 * 60_000); // 23:59
+  assert.equal(await store.allow("jev", "room"), false);
+  t.mock.timers.tick(60_000); // 00:00 next day
+  assert.equal(await store.allow("jev", "room"), true);
 });

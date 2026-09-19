@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { decide, judge } = require("../jev");
+const { decide, decideName, judge } = require("../jev");
 
 function answers(over = {}) {
   const base = {
@@ -128,4 +128,61 @@ test("judge: every upstream request, retries included, is charged to the budget"
     (e) => e.cooldown === true
   );
   assert.strictEqual(calls, 1);
+});
+
+test("plain laughter is allowed even when Jev reads it as cold/mocking in context", () => {
+  const d = decide(
+    answers({
+      is_kind: { noul: 0.1 },
+      is_laughter: { noul: 0.97 },
+      is_insult: { noul: 0.55 },
+      is_sarcastic_or_backhanded: { noul: 0.5 },
+      tone: { choice: "cold", probabilities: { warm: 0.05, neutral: 0.1, cold: 0.8, hostile: 0.05 } },
+      niceness: { score: 0.6, probabilities: { 0: 0.5, 1: 0.4, 2: 0.1, 3: 0, 4: 0 } },
+    })
+  );
+  assert.equal(d.allowed, true);
+  assert.deepEqual(d.hits, []);
+});
+
+test("laughter does not excuse profanity, slurs or hate", () => {
+  const d = decide(answers({ is_laughter: { noul: 0.9 }, is_profane_or_slur: { noul: 0.8 } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["is_profane_or_slur"]);
+});
+
+// ---------------------------------------------------------------- names
+function nameAnswers(over = {}) {
+  const base = {
+    name_is_profane_or_slur: { noul: 0.01 },
+    name_is_derogatory: { noul: 0.02 },
+    name_is_hateful: { noul: 0.01 },
+    name_is_sexual: { noul: 0.01 },
+    name_is_hostile: { noul: 0.02 },
+    name_vibe: { choice: "neutral", probabilities: { positive: 0.3, neutral: 0.65, negative: 0.05 } },
+  };
+  return { ...base, ...over };
+}
+
+test("plain or cheerful names are allowed", () => {
+  assert.equal(decideName(nameAnswers()).allowed, true);
+  assert.equal(decideName(nameAnswers({ name_vibe: { choice: "positive", probabilities: { positive: 0.9, neutral: 0.1, negative: 0 } } })).allowed, true);
+});
+
+test("a disguised slur in a name is blocked", () => {
+  const d = decideName(nameAnswers({ name_is_profane_or_slur: { noul: 0.7 } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["name_is_profane_or_slur"]);
+  assert.deepEqual(d.reasons, ["no swears or slurs in a name"]);
+});
+
+test("a confidently negative vibe blocks a name even with no flag fired", () => {
+  const d = decideName(nameAnswers({ name_vibe: { choice: "negative", probabilities: { positive: 0.05, neutral: 0.25, negative: 0.7 } } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["name_negative"]);
+});
+
+test("an edgy-but-harmless name with a weak negative lean is allowed", () => {
+  const d = decideName(nameAnswers({ name_is_hostile: { noul: 0.3 }, name_vibe: { choice: "negative", probabilities: { positive: 0.1, neutral: 0.45, negative: 0.45 } } }));
+  assert.equal(d.allowed, true);
 });
