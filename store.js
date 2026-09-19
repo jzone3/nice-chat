@@ -21,8 +21,8 @@ const REACTION_TTL_S = 60 * 60 * 24 * 30;
 // `jev` is keyed by a single constant and caps the room's total upstream Jev calls.
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN; // fixed UTC-day buckets
-// 1.25M calls ≈ $100/day at Jev's $0.042 per million input tokens (~1,900 tokens per message check).
-const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 1_250_000;
+// 6.25M calls ≈ $500/day at Jev's $0.042 per million input tokens (~1,900 tokens per message check).
+const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 6_250_000;
 // Past this share of the day's budget the as-you-type preview pauses so real sends keep flowing.
 const JEV_PREVIEW_SHARE = Math.min(1, Math.max(0, Number(process.env.JEV_PREVIEW_SHARE) || 0.8));
 const LIMITS = {
