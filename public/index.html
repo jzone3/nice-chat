@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=23" />
+  <link rel="stylesheet" href="style.css?v=24" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -127,7 +127,7 @@
     </form>
   </div>
 
-  <div class="modal hidden" id="welcome-modal" role="dialog" aria-labelledby="welcome-title">
+  <div class="modal hidden" id="welcome-modal" role="dialog" aria-modal="true" aria-labelledby="welcome-title">
     <div class="join welcome card">
       <button type="button" class="join-close" id="welcome-close" aria-label="Close">✕</button>
       <h1 id="welcome-title">👋 Welcome, <span id="welcome-who">friend</span>!</h1>
@@ -147,6 +147,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=23"></script>
+  <script src="app.js?v=24"></script>
 </body>
 </html>
