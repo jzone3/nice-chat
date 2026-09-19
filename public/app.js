@@ -11,7 +11,7 @@
     modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
     pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
     joinClose: $("join-close"), joinTitle: $("join-title"), joinSub: $("join-sub"),
-    welcome: $("welcome-modal"), welcomeWho: $("welcome-who"), welcomeOk: $("welcome-ok"), welcomeClose: $("welcome-close"), about: $("about"),
+    welcome: $("welcome-modal"), welcomeWho: $("welcome-who"), welcomeOk: $("welcome-ok"), welcomeClose: $("welcome-close"),
     toast: $("toast"),
     chat: document.querySelector(".chat"), rail: $("rail"), live: $("live"),
     railToggle: $("rail-toggle"), railClose: $("rail-close"), railBackdrop: $("rail-backdrop"),
@@ -176,13 +176,10 @@
     }
   };
 
-  // House rules, shown once right after joining and again from the footer's "about".
-  // While open, the rest of the page is inert and Tab cycles inside the dialog; closing returns focus to the opener.
+  // House rules, shown once right after joining. While open, the rest of the page is inert and Tab cycles inside the dialog.
   const behindWelcome = () => [...document.body.children].filter((n) => n !== el.welcome && n.tagName !== "SCRIPT");
-  let welcomeOpener = null;
-  function openWelcome(opener = null) {
-    welcomeOpener = opener;
-    el.welcomeWho.textContent = me ? `${me.emoji} ${me.name}` : "friend";
+  function openWelcome() {
+    el.welcomeWho.textContent = me ? me.name : "friend";
     for (const n of behindWelcome()) n.inert = true;
     el.welcome.classList.remove("hidden");
     el.welcomeOk.focus();
@@ -190,10 +187,8 @@
   function closeWelcome() {
     el.welcome.classList.add("hidden");
     for (const n of behindWelcome()) n.inert = false;
-    (welcomeOpener || (me ? el.draft : el.joinName)).focus();
-    welcomeOpener = null;
+    el.draft.focus();
   }
-  el.about.onclick = () => openWelcome(el.about);
   el.welcomeOk.onclick = closeWelcome;
   el.welcomeClose.onclick = closeWelcome;
   el.welcome.onclick = (e) => { if (e.target === el.welcome) closeWelcome(); };

@@ -1,6 +1,6 @@
 # 💖 Nice Chat
 
-Built with Devin · [By Jared](https://x.com/imjaredz)
+[Built with Devin](https://devin.ai) · [By Jared](https://x.com/imjaredz)
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
@@ -131,4 +131,4 @@ messages, hall of fame, presence, rate limits and Jev stats are all shared, so a
 
 ---
 
-Made with 💖 · Built with Devin · [By Jared](https://x.com/imjaredz)
+Made with 💖 · [Built with Devin](https://devin.ai) · [By Jared](https://x.com/imjaredz)
