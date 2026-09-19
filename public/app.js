@@ -10,6 +10,7 @@
     sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"),
     modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
     pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
+    joinClose: $("join-close"), joinTitle: $("join-title"), joinSub: $("join-sub"),
     toast: $("toast"),
     chat: document.querySelector(".chat"), rail: $("rail"), live: $("live"),
     railToggle: $("rail-toggle"), railClose: $("rail-close"), railBackdrop: $("rail-backdrop"),
@@ -130,31 +131,62 @@
   renderGrid();
   preview();
 
+  // The same card joins and edits: with an account it opens pre-filled as "change your look".
+  function openJoin(editing) {
+    el.joinTitle.textContent = editing ? "✏️ Change your look" : "💖 Nice Chat";
+    el.joinSub.textContent = editing ? "New name, new emoji, or both. Jev checks names too." : "One big room. Everyone in the world. Only nice messages get through.";
+    el.joinBtn.textContent = editing ? "Save ✨" : "Join the chat 🎉";
+    el.joinClose.classList.toggle("hidden", !editing);
+    el.joinErr.replaceChildren();
+    if (editing) { el.joinName.value = me.name; pickedEmoji = me.emoji; renderGrid(); preview(); }
+    el.modal.classList.remove("hidden");
+    el.joinName.focus();
+  }
+  el.meEmoji.onclick = () => { if (me) openJoin(true); };
+  el.joinClose.onclick = () => { if (me) el.modal.classList.add("hidden"); };
+  el.modal.addEventListener("keydown", (e) => { if (e.key === "Escape" && me) el.modal.classList.add("hidden"); });
+
+  function joinError(data) {
+    el.joinErr.replaceChildren(document.createTextNode(data.error || "Hmm, try again"));
+    if (data.reasons?.length) {
+      const tips = document.createElement("span");
+      tips.className = "reasons";
+      tips.replaceChildren(...data.reasons.map((r) => { const c = document.createElement("span"); c.className = "tip"; c.textContent = r; return c; }));
+      el.joinErr.append(tips);
+    }
+  }
+
   el.joinForm.onsubmit = async (e) => {
     e.preventDefault();
-    el.joinErr.textContent = "";
+    el.joinErr.replaceChildren();
     el.joinBtn.disabled = true;
+    const editing = Boolean(me);
     try {
       const { ok, data } = await api("/api/join", { name: el.joinName.value, emoji: pickedEmoji });
-      if (!ok) { el.joinErr.textContent = data.error || "Hmm, try again"; return; }
+      if (!ok) { joinError(data); if (data.blocked) wiggle(0.8, el.joinBtn); return; }
       enter(data.user);
-      connect(); // reconnect so the stream carries our identity for presence
-      toast(`Welcome, ${data.user.emoji} ${data.user.name}!`);
+      if (!editing) connect(); // reconnect so the stream carries our identity for presence
+      toast(editing ? `You're now ${data.user.emoji} ${data.user.name}` : `Welcome, ${data.user.emoji} ${data.user.name}!`);
     } catch {
-      el.joinErr.textContent = "Couldn't reach the server — try again";
+      joinError({ error: "Couldn't reach the server — try again" });
     } finally {
       el.joinBtn.disabled = false;
     }
   };
 
+  // Every look this tab has worn, so messages sent under an old name stay "mine" after a change.
+  const myLooks = new Set();
+  const isMine = (m) => myLooks.has(`${m.name}\u0000${m.emoji}`);
   function enter(user) {
     me = user;
+    myLooks.add(`${me.name}\u0000${me.emoji}`);
     el.modal.classList.add("hidden");
     el.meEmoji.textContent = user.emoji;
+    el.meEmoji.disabled = false;
     el.draft.disabled = false;
     el.send.disabled = false;
     el.draft.focus();
-    for (const m of el.thread.querySelectorAll(".msg")) m.classList.toggle("mine", m.dataset.name === me.name && m.dataset.emoji === me.emoji);
+    for (const m of el.thread.querySelectorAll(".msg")) m.classList.toggle("mine", isMine(m.dataset));
   }
 
   // ------------------------------------------------------------ realtime
@@ -245,7 +277,7 @@
     el.hello.style.display = "none";
     const stick = nearBottom();
     const node = document.createElement("article");
-    node.className = "msg" + (me && m.name === me.name && m.emoji === me.emoji ? " mine" : "");
+    node.className = "msg" + (isMine(m) ? " mine" : "");
     node.dataset.id = m.id || "";
     node.dataset.ts = m.ts;
     node.dataset.name = m.name;
@@ -460,14 +492,16 @@
 
   // ------------------------------------------------------------ wiggle
   // meanness 0..1 → amplitude 4–30px, rotation 1–12°, duration 0.45–1.1s (+ full-screen quake when it's really mean)
-  function wiggle(meanness = 0.3) {
+  function wiggle(meanness = 0.3, target = el.send) {
     const m = Math.max(0, Math.min(1, meanness));
-    el.send.style.setProperty("--amp", `${(4 + m * 26).toFixed(1)}px`);
-    el.send.style.setProperty("--rot", `${(1 + m * 11).toFixed(1)}deg`);
-    el.send.style.setProperty("--wiggle-dur", `${(0.45 + m * 0.65).toFixed(2)}s`);
-    el.send.classList.remove("wiggle");
-    void el.send.offsetWidth; // restart animation
-    el.send.classList.add("wiggle");
+    target.style.setProperty("--amp", `${(4 + m * 26).toFixed(1)}px`);
+    target.style.setProperty("--rot", `${(1 + m * 11).toFixed(1)}deg`);
+    target.style.setProperty("--wiggle-dur", `${(0.45 + m * 0.65).toFixed(2)}s`);
+    target.classList.remove("wiggle");
+    void target.offsetWidth; // restart animation
+    target.classList.add("wiggle");
+    // drop the class when done, or it replays whenever the element is hidden and shown again (the join card)
+    target.addEventListener("animationend", () => target.classList.remove("wiggle"), { once: true });
     if (m >= 0.85) {
       document.body.classList.remove("quake");
       void document.body.offsetWidth;
@@ -593,6 +627,6 @@
     if (data.max_text > 0) el.draft.maxLength = data.max_text;
     connect();
     if (data.user) enter(data.user);
-    else el.modal.classList.remove("hidden");
+    else openJoin(false);
   })();
 })();

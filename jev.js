@@ -111,6 +111,62 @@ const QUESTIONS = {
   },
 };
 
+// A display name is shown next to every message the person sends, so it is judged on its own
+// (no room context) with questions phrased for a name rather than a sentence.
+const NAME_QUESTIONS = {
+  name_is_profane_or_slur: {
+    type: "noul",
+    instructions:
+      "Does `username` contain a swear word, obscenity or slur — including disguised ones? Decode digits and symbols as the letters they resemble (1/!=i, 3=e, 4/@=a, 0=o, 5/$=s, 7=t), ignore underscores, dots and spaces between letters, and sound out homophones.",
+    criteria: {
+      true: "'fuckface', 'sh1thead', 'k1k3', 'n1gz', 'b!tch_queen', 'f a g', 'phuck'",
+      false: "Ordinary words and names, harmless leetspeak (gr8, l8r), identifiers like k1 or x2, real names that merely look unusual",
+    },
+  },
+  name_is_derogatory: {
+    type: "noul",
+    instructions: "Does `username` insult, mock or demean a person or a group — a put-down, a jeer, or a stereotype label used as a name?",
+    criteria: {
+      true: "'ur_all_idiots', 'losers_everywhere', 'karen_slayer', 'jared_is_dumb', 'fat_people_lol', 'retard'",
+      false: "Neutral, playful or self-deprecating-but-harmless names: 'sunny sam', 'cool_cat42', 'sleepy potato', 'nerd'",
+    },
+  },
+  name_is_hateful: {
+    type: "noul",
+    instructions:
+      "Does `username` reference hate, extremism or contempt for a group because of race, religion, sexuality, gender, disability, age or nationality — including coded references (hitler, kkk, 1488, 88, wpww, nazi imagery)?",
+    criteria: {
+      true: "'hitler_did_nothing', 'kkk_kid', 'adolf88', 'trans_are_gross', 'white_power'",
+      false: "No group targeted; sincere or proud identity terms ('proud_trans_mom', 'gay_and_happy') are fine",
+    },
+  },
+  name_is_sexual: {
+    type: "noul",
+    instructions: "Is `username` sexually explicit or crude?",
+    criteria: {
+      true: "Genital slang, sex acts, 'horny4u', 'big_d1ck_dan'",
+      false: "Nothing sexual, or mild affectionate words like 'cutie' or 'sweetheart'",
+    },
+  },
+  name_is_hostile: {
+    type: "noul",
+    instructions: "Is `username` hostile, threatening or meant to provoke or upset the people who will read it next to every message?",
+    criteria: {
+      true: "'kill_yourself', 'i_hate_you_all', 'your_mom_is_ugly', 'die_die_die', 'fight_me'",
+      false: "Friendly, neutral, edgy-but-harmless ('darkstar', 'chaos_goblin', 'grumpy cat')",
+    },
+  },
+  name_vibe: {
+    type: "choice",
+    instructions: "What vibe does `username` give off as a display name in a friendly chat room?",
+    criteria: {
+      positive: "Warm, playful, cute, cheerful or proud",
+      neutral: "Plain: a first name, a handle, an object, an animal, letters and numbers",
+      negative: "Mean-spirited, gross, creepy or aggressive",
+    },
+  },
+};
+
 // --------------------------------------------------------------- thresholds
 // Cost of being wrong: blocking a kind message is annoying; letting a cruel
 // one through breaks the promise of the room. So hard categories block at a
@@ -129,6 +185,13 @@ const THRESHOLDS = {
   niceness_min: 2.5, // score below this blocks even if no flag fired
   kind_rescue: 0.85, // very kind + only soft flags -> let it through
   laughter_rescue: 0.7, // plain laughter is good: only slurs/profanity/hate/threats can still block it
+  // names
+  name_is_profane_or_slur: 0.4,
+  name_is_hateful: 0.4,
+  name_is_sexual: 0.5,
+  name_is_derogatory: 0.5,
+  name_is_hostile: 0.5,
+  name_negative_vibe_min_prob: 0.6, // vibe == negative with at least this probability blocks on its own
 };
 
 const REASON_LABELS = {
@@ -143,6 +206,12 @@ const REASON_LABELS = {
   hostile: "hostile tone",
   cold: "pretty cold",
   low_niceness: "not quite nice enough",
+  name_is_profane_or_slur: "no swears or slurs in a name",
+  name_is_derogatory: "that name puts people down",
+  name_is_hateful: "no hate here",
+  name_is_sexual: "keep it PG",
+  name_is_hostile: "that name sounds hostile",
+  name_negative: "pick something friendlier",
 };
 
 const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label", "is_insult"];
@@ -217,8 +286,34 @@ function decide(answers) {
   };
 }
 
+function decideName(answers) {
+  const reasons = [];
+  const flags = {};
+  for (const id of Object.keys(NAME_QUESTIONS)) {
+    if (NAME_QUESTIONS[id].type !== "noul") continue;
+    const p = answers[id]?.noul ?? 0;
+    flags[id] = Math.round(p * 1000) / 1000;
+    if (p >= THRESHOLDS[id]) reasons.push({ id, label: REASON_LABELS[id], p });
+  }
+  const vibe = answers.name_vibe?.choice ?? "neutral";
+  const vibeProbs = answers.name_vibe?.probabilities ?? {};
+  if (vibe === "negative" && (vibeProbs.negative ?? 0) >= THRESHOLDS.name_negative_vibe_min_prob) {
+    reasons.push({ id: "name_negative", label: REASON_LABELS.name_negative, p: vibeProbs.negative });
+  }
+  reasons.sort((a, b) => b.p - a.p);
+  return {
+    allowed: reasons.length === 0,
+    reasons: reasons.slice(0, 3).map((r) => r.label),
+    hits: reasons.map((r) => r.id),
+    vibe,
+    vibe_probs: Object.fromEntries(Object.entries(vibeProbs).map(([k, v]) => [k, Math.round(v * 1000) / 1000])),
+    flags,
+  };
+}
+
 // ------------------------------------------------------------------ client
 const cache = new Map(); // exact state string -> result
+const nameCache = new Map(); // username -> result
 const CACHE_MAX = 5000;
 const stats = { requests: 0, total_latency_ms: 0, blocked: 0, allowed: 0, input_tokens: 0, output_tokens: 0, errors: 0 };
 
@@ -297,4 +392,27 @@ async function judge(draft, context = [], { force = false, reserve } = {}) {
   return result;
 }
 
-module.exports = { QUESTIONS, THRESHOLDS, MODEL, decide, judge, getStats };
+/** Judge a display name on its own. Same budget hook as `judge`; results are cached per name. */
+async function judgeName(name, { reserve } = {}) {
+  const username = name.trim();
+  if (nameCache.has(username)) return { ...nameCache.get(username), cached: true };
+  const t0 = performance.now();
+  let data;
+  try {
+    data = await callJev({ state: { username }, model: MODEL, questions: NAME_QUESTIONS }, reserve);
+  } catch (e) {
+    stats.errors++;
+    throw e;
+  }
+  const latency_ms = Math.round(performance.now() - t0);
+  stats.requests++;
+  stats.total_latency_ms += latency_ms;
+  stats.input_tokens += data.usage?.input_tokens ?? 0;
+  stats.output_tokens += data.usage?.output_tokens ?? 0;
+  const result = { ...decideName(data.answers), latency_ms, cached: false };
+  if (nameCache.size >= CACHE_MAX) nameCache.delete(nameCache.keys().next().value);
+  nameCache.set(username, result);
+  return result;
+}
+
+module.exports = { QUESTIONS, NAME_QUESTIONS, THRESHOLDS, MODEL, decide, decideName, judge, judgeName, getStats };

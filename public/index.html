@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=19" />
+  <link rel="stylesheet" href="style.css?v=20" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -48,7 +48,7 @@
 
       <form class="composer" id="composer" autocomplete="off">
         <div class="compose-row">
-          <span class="me-emoji" id="me-emoji">🙂</span>
+          <button type="button" class="me-emoji" id="me-emoji" title="Change your name or emoji" aria-label="Change your name or emoji" disabled>🙂</button>
           <textarea id="draft" rows="1" maxlength="280" placeholder="Type something nice…" disabled></textarea>
           <button type="submit" id="send" class="send" disabled>
             <span class="send-label">Send</span> <span class="send-emoji">💌</span>
@@ -104,8 +104,9 @@
 
   <div class="modal hidden" id="join-modal">
     <form class="join card" id="join-form">
-      <h1>💖 Nice Chat</h1>
-      <p class="join-sub">One big room. Everyone in the world. Only nice messages get through.</p>
+      <button type="button" class="join-close hidden" id="join-close" aria-label="Cancel">✕</button>
+      <h1 id="join-title">💖 Nice Chat</h1>
+      <p class="join-sub" id="join-sub">One big room. Everyone in the world. Only nice messages get through.</p>
       <label class="field">
         <span>What should we call you?</span>
         <input id="join-name" maxlength="20" placeholder="e.g. sunny sam" required autofocus />
@@ -117,11 +118,11 @@
       <div class="join-preview" id="join-preview"><span class="pv-emoji">🙂</span> <span class="pv-name">you</span></div>
       <button type="submit" class="join-btn" id="join-btn">Join the chat 🎉</button>
       <p class="join-err" id="join-err"></p>
-      <p class="join-fine">We drop a cookie so this computer remembers you. That's all it does.</p>
+      <p class="join-fine">Jev checks names too — keep it friendly. We drop a cookie so this computer remembers you. That's all it does.</p>
     </form>
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=19"></script>
+  <script src="app.js?v=20"></script>
 </body>
 </html>

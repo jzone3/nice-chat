@@ -3,7 +3,7 @@
 // Needs TYPESAFE_API_KEY; skipped otherwise. Not part of `npm test` (network); run: npm run test:live
 const test = require("node:test");
 const assert = require("node:assert");
-const { judge } = require("../jev");
+const { judge, judgeName } = require("../jev");
 
 const live = Boolean(process.env.TYPESAFE_API_KEY);
 
@@ -35,6 +35,18 @@ const ALLOW = [
 const LAUGH = ["hahaha", "LOL", "lol", "HAHAHAHA", "lmao", "😂😂😂", "haha that is hilarious"];
 const MISHAPS = [[], ["I just tripped over my cat and spilled coffee everywhere"], ["I failed my driving test today :("]];
 
+// display names: judged on their own, shown next to every message
+const BLOCK_NAMES = [
+  "fuckface", "sh1thead", "b!tch_queen", "k1k3", "n1gz", "f a g", "retard", "tranny", "libtard",
+  "ur_all_idiots", "losers_everywhere", "jared_is_dumb", "fat_people_lol", "karen_slayer",
+  "hitler_did_nothing", "kkk_kid", "adolf88", "white_power", "trans_are_gross",
+  "horny4u", "big_d1ck_dan", "kill_yourself", "i_hate_you_all", "your_mom_is_ugly", "die_die_die",
+];
+const ALLOW_NAMES = [
+  "sunny sam", "jared", "JZ", "cool_cat42", "sleepy potato", "Mx. Pickles", "nerd", "darkstar", "chaos_goblin", "grumpy cat",
+  "proud_trans_mom", "gay_and_happy", "k1", "x2", "gr8_sk8r", "l8r_g8r", "meadow", "cutie pie", "abc123", "the real slim", "kafka fan",
+];
+
 async function verdicts(list, context = []) {
   const out = await Promise.all(list.map(async (t) => [t, await judge(t, context, { force: true })]));
   return out;
@@ -55,5 +67,17 @@ test("laughing is allowed in any context", { skip: !live && "TYPESAFE_API_KEY no
   for (const ctx of MISHAPS) {
     for (const [t, v] of await verdicts(LAUGH, ctx)) if (!v.allowed) blocked.push(`${JSON.stringify(t)} after ${JSON.stringify(ctx)} <- ${v.reasons.join(", ")}`);
   }
+  assert.deepEqual(blocked, [], `blocked but should be allowed:\n${blocked.join("\n")}`);
+});
+
+test("mean, crude, hateful or disguised-slur display names are blocked", { skip: !live && "TYPESAFE_API_KEY not set" }, async () => {
+  const out = await Promise.all(BLOCK_NAMES.map(async (n) => [n, await judgeName(n)]));
+  const leaked = out.filter(([, v]) => v.allowed).map(([n, v]) => `${JSON.stringify(n)} vibe=${v.vibe} flags=${JSON.stringify(v.flags)}`);
+  assert.deepEqual(leaked, [], `allowed but should be blocked:\n${leaked.join("\n")}`);
+});
+
+test("plain, playful and proud display names are allowed", { skip: !live && "TYPESAFE_API_KEY not set" }, async () => {
+  const out = await Promise.all(ALLOW_NAMES.map(async (n) => [n, await judgeName(n)]));
+  const blocked = out.filter(([, v]) => !v.allowed).map(([n, v]) => `${JSON.stringify(n)} <- ${v.reasons.join(", ")} flags=${JSON.stringify(v.flags)} vibe=${JSON.stringify(v.vibe_probs)}`);
   assert.deepEqual(blocked, [], `blocked but should be allowed:\n${blocked.join("\n")}`);
 });

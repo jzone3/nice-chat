@@ -150,7 +150,12 @@ h2 { font-size: 1.05rem; }
 /* ---------------------------------------------------------------- composer */
 .composer { border-top: 2px solid var(--line); padding: 0.8rem 1rem 0.9rem; background: var(--glass); }
 .compose-row { display: flex; gap: 0.7rem; align-items: flex-end; }
-.me-emoji { font-size: 2rem; line-height: 1; padding-bottom: 0.4rem; }
+/* your emoji doubles as the "change my look" button */
+.me-emoji { position: relative; font-size: 2rem; line-height: 1; padding: 0 0 0.4rem; background: none; border: 0; cursor: pointer; font-family: inherit; transition: transform 0.15s; }
+.me-emoji:disabled { cursor: default; }
+.me-emoji::after { content: "✏️"; position: absolute; right: -0.35rem; bottom: 0.2rem; font-size: 0.8rem; line-height: 1; opacity: 0; transition: opacity 0.15s; }
+.me-emoji:not(:disabled):hover, .me-emoji:focus-visible { transform: scale(1.12) rotate(-8deg); }
+.me-emoji:not(:disabled):hover::after, .me-emoji:focus-visible::after { opacity: 1; }
 #draft {
   flex: 1; resize: none; min-height: 3.2rem; max-height: 9rem; padding: 0.7rem 1rem; font-size: 1.15rem;
   border: 2px solid var(--line); border-radius: 18px; background: var(--paper); outline: none;
@@ -169,7 +174,7 @@ h2 { font-size: 1.05rem; }
 .send.blocked { background: var(--bad); color: #fff; }
 
 /* the wiggle: amplitude, rotation and duration scale with how mean the message is */
-.send.wiggle { animation: wiggle var(--wiggle-dur) cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
+.send.wiggle, .join-btn.wiggle { animation: wiggle var(--wiggle-dur) cubic-bezier(0.36, 0.07, 0.19, 0.97) both; }
 @keyframes wiggle {
   0%, 100% { transform: translateX(0) rotate(0); }
   10% { transform: translateX(calc(-1 * var(--amp))) rotate(calc(-1 * var(--rot))); }
@@ -242,7 +247,11 @@ body.debug .prob.detail { display: grid; }
 /* ---------------------------------------------------------------- join */
 .modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(59, 47, 74, 0.35); backdrop-filter: blur(6px); z-index: 10; }
 .modal.hidden { display: none; }
-.join { width: min(440px, 100%); padding: 1.6rem 1.8rem; background: var(--lemon); animation: pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.join { position: relative; width: min(440px, 100%); padding: 1.6rem 1.8rem; background: var(--lemon); animation: pop 0.4s cubic-bezier(0.2, 1.4, 0.4, 1); }
+.join-close { position: absolute; top: 0.7rem; right: 0.8rem; width: 2rem; height: 2rem; border: 2px solid var(--line); border-radius: 50%; background: var(--paper); font-family: inherit; font-weight: 700; cursor: pointer; }
+.join-close.hidden { display: none; }
+.join-err .reasons { display: inline-flex; margin: 0 0 0 0.3rem; vertical-align: baseline; }
+.join-err .reasons::before { content: "—"; font-weight: 400; }
 .join h1 { font-size: 2rem; text-shadow: 2px 2px 0 var(--pink); }
 .join-sub { margin: 0 0 1rem; color: var(--ink); }
 .field { display: block; margin-bottom: 1rem; }
