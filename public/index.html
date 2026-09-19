@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=22" />
+  <link rel="stylesheet" href="style.css?v=23" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -96,6 +96,8 @@
   </main>
 
   <footer class="foot">
+    <button type="button" class="linkish" id="about">about</button>
+    <span>·</span>
     <span>Built with Devin</span>
     <span>·</span>
     <a href="https://github.com/jzone3/nice-chat" target="_blank" rel="noopener">source</a>
@@ -125,7 +127,26 @@
     </form>
   </div>
 
+  <div class="modal hidden" id="welcome-modal" role="dialog" aria-labelledby="welcome-title">
+    <div class="join welcome card">
+      <button type="button" class="join-close" id="welcome-close" aria-label="Close">✕</button>
+      <h1 id="welcome-title">👋 Welcome, <span id="welcome-who">friend</span>!</h1>
+      <p class="join-sub">This is a chat room for nice people.</p>
+      <ul class="rules">
+        <li>No racism</li>
+        <li>No profanity</li>
+        <li>No being mean</li>
+      </ul>
+      <p class="welcome-jev">Every message goes through <strong>Jev</strong> in real time to keep things nice.</p>
+      <button type="button" class="join-btn" id="welcome-ok">Got it, let's chat 💬</button>
+      <p class="join-fine welcome-credits">
+        <a href="https://github.com/jzone3/nice-chat" target="_blank" rel="noopener">Read the source code</a>
+        · Built with Devin by <a href="https://x.com/imjaredz" target="_blank" rel="noopener">Jared</a>
+      </p>
+    </div>
+  </div>
+
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=22"></script>
+  <script src="app.js?v=23"></script>
 </body>
 </html>

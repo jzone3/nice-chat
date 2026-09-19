@@ -246,6 +246,7 @@ body.debug .prob.detail { display: grid; }
 
 /* ---------------------------------------------------------------- footer */
 .foot { display: flex; justify-content: center; align-items: center; gap: 0.6rem; padding: 0 1rem 0.8rem; font-size: 0.75rem; color: var(--muted); }
+.linkish { padding: 0; border: 0; background: none; font: inherit; color: inherit; text-decoration: underline; cursor: pointer; }
 
 /* ---------------------------------------------------------------- join */
 .modal { position: fixed; inset: 0; display: grid; place-items: center; padding: 1rem; background: rgba(59, 47, 74, 0.35); backdrop-filter: blur(6px); z-index: 10; }
@@ -272,6 +273,18 @@ body.debug .prob.detail { display: grid; }
 .join-btn:active { transform: translateY(3px); box-shadow: none; }
 .join-err { min-height: 1.2rem; margin: 0.4rem 0 0; color: #c0304f; font-weight: 700; }
 .join-fine { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--muted); }
+
+/* welcome: shown once, right after you pick a name */
+.welcome { background: var(--mint); }
+.welcome h1 { text-shadow: 2px 2px 0 var(--sky); }
+.welcome .join-sub { font-size: 1.2rem; font-weight: 700; }
+.rules { list-style: none; margin: 0 0 1rem; padding: 0; display: grid; gap: 0.4rem; }
+.rules li { display: flex; align-items: center; gap: 0.6rem; padding: 0.5rem 0.9rem; font-size: 1.1rem; font-weight: 700; background: var(--paper); border: 2px solid var(--line); border-radius: 14px; }
+.rules li::before { content: "\1F6AB"; font-size: 1.2rem; }
+.welcome-jev { margin: 0 0 1rem; }
+.welcome-credits { margin-top: 0.7rem; text-align: center; }
+body.debug .welcome { background: var(--paper); }
+body.debug .welcome h1 { text-shadow: 0 0 12px #39ff14; }
 
 .toast { position: fixed; left: 50%; top: calc(0.9rem + env(safe-area-inset-top)); transform: translate(-50%, -24px); opacity: 0; padding: 0.6rem 1.2rem; background: var(--ink); color: #fff; border-radius: 999px; font-weight: 700; transition: all 0.25s; pointer-events: none; z-index: 20; max-width: 90vw; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
