@@ -177,20 +177,34 @@
   };
 
   // House rules, shown once right after joining and again from the footer's "about".
-  function openWelcome() {
+  // While open, the rest of the page is inert and Tab cycles inside the dialog; closing returns focus to the opener.
+  const behindWelcome = () => [...document.body.children].filter((n) => n !== el.welcome && n.tagName !== "SCRIPT");
+  let welcomeOpener = null;
+  function openWelcome(opener = null) {
+    welcomeOpener = opener;
     el.welcomeWho.textContent = me ? `${me.emoji} ${me.name}` : "friend";
+    for (const n of behindWelcome()) n.inert = true;
     el.welcome.classList.remove("hidden");
     el.welcomeOk.focus();
   }
   function closeWelcome() {
     el.welcome.classList.add("hidden");
-    if (me) el.draft.focus();
+    for (const n of behindWelcome()) n.inert = false;
+    (welcomeOpener || (me ? el.draft : el.joinName)).focus();
+    welcomeOpener = null;
   }
-  el.about.onclick = openWelcome;
+  el.about.onclick = () => openWelcome(el.about);
   el.welcomeOk.onclick = closeWelcome;
   el.welcomeClose.onclick = closeWelcome;
   el.welcome.onclick = (e) => { if (e.target === el.welcome) closeWelcome(); };
-  el.welcome.addEventListener("keydown", (e) => { if (e.key === "Escape") closeWelcome(); });
+  el.welcome.addEventListener("keydown", (e) => {
+    if (e.key === "Escape") return closeWelcome();
+    if (e.key !== "Tab") return;
+    const stops = [...el.welcome.querySelectorAll("button, a[href]")];
+    const first = stops[0], last = stops[stops.length - 1];
+    if (e.shiftKey && document.activeElement === first) { e.preventDefault(); last.focus(); }
+    else if (!e.shiftKey && document.activeElement === last) { e.preventDefault(); first.focus(); }
+  });
 
   // Every look this tab has worn, so messages sent under an old name stay "mine" after a change.
   const myLooks = new Set();
