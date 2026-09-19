@@ -7,7 +7,7 @@
     verdict: $("verdict"), face: $("verdict-face"), meter: $("meter-fill"), vtext: $("verdict-text"), chars: $("chars"), reasons: $("reasons"),
     meEmoji: $("me-emoji"), online: $("online-count"), faces: $("faces"), debug: $("debug-toggle"),
     liveHint: $("live-hint"), liveProbs: $("live-probs"), liveMeta: $("live-meta"), fame: $("fame"),
-    sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"),
+    sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"), sBudget: $("s-budget"),
     modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
     pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
     joinClose: $("join-close"), joinTitle: $("join-title"), joinSub: $("join-sub"),
@@ -31,6 +31,7 @@
     is_derogatory_label: "put-down label",
     is_hateful: "hateful",
     is_harassment_or_threat: "harass/threat",
+    has_link: "link",
   };
   const FACES = ["😡", "😒", "😐", "😊", "🥰"];
   const REACTIONS = ["❤️", "😂"];
@@ -391,6 +392,10 @@
     el.sBlocked.textContent = s.blocked;
     el.sLat.textContent = s.requests ? `${Math.round(s.total_latency_ms / s.requests)} ms` : "–";
     if (s.model) el.sModel.textContent = s.model;
+    if (s.budget) {
+      const pct = Math.round((s.budget.used / s.budget.max) * 100);
+      el.sBudget.textContent = `${s.budget.used.toLocaleString()} / ${s.budget.max.toLocaleString()} (${pct}%)${s.budget.preview_paused ? " · preview paused" : ""}`;
+    }
   }
 
   // ------------------------------------------------------------ typing → judge
@@ -408,7 +413,9 @@
     if (!v || v.skipped) {
       el.face.textContent = "😶";
       el.meter.style.width = "0%";
-      el.vtext.textContent = v?.skipped ? "Keep going — Jev scores drafts of 3+ words as you type." : "Jev checks every message for niceness before it lands.";
+      el.vtext.textContent = v?.preview_paused
+        ? "Busy day! Jev is saving its energy for real messages — just hit send."
+        : v?.skipped ? "Keep going — Jev scores drafts of 3+ words as you type." : "Jev checks every message for niceness before it lands.";
       el.sendLabel.textContent = "Send";
       el.sendEmoji.textContent = "💌";
       return;
@@ -460,7 +467,8 @@
     const text = el.draft.value;
     seq++;
     judgeCtl?.abort();
-    if (words(text) < 3) { latest = null; setVerdict(text.trim() ? { skipped: true } : null); renderLive(null); return; }
+    // Short drafts skip Jev, but one that could be an address still goes to the server's link check.
+    if (words(text) < 3 && !/[./:@]/.test(text)) { latest = null; setVerdict(text.trim() ? { skipped: true } : null); renderLive(null); return; }
     const mySeq = seq;
     judgeCtl = new AbortController();
     setVerdict(null, { thinking: true });
@@ -469,6 +477,7 @@
       if (mySeq !== seq) return;
       if (status === 400 || status === 429 || status === 503) { setVerdict({ error: data.error }); return; }
       if (status === 401) { el.modal.classList.remove("hidden"); return; }
+      if (data.preview_paused) { latest = null; setVerdict(data); renderLive(null); renderStats(data.stats); return; }
       latest = { ...data, text: text.trim() };
       setVerdict(data);
       renderLive(data);
@@ -491,9 +500,21 @@
   });
 
   // ------------------------------------------------------------ wiggle
-  // meanness 0..1 → amplitude 4–30px, rotation 1–12°, duration 0.45–1.1s (+ full-screen quake when it's really mean)
+  // meanness 0..1 → amplitude 4–30px, rotation 1–12°, duration 0.45–1.1s, red flash 0.18–0.6 opacity
+  // (+ full-screen quake when it's really mean). meanness 0 is an empty draft: nudge only, no flash.
+  function flash(m) {
+    const b = document.body;
+    b.style.setProperty("--flash-a", (0.18 + m * 0.42).toFixed(2));
+    b.style.setProperty("--flash-dur", `${(0.45 + m * 0.5).toFixed(2)}s`);
+    b.classList.remove("flash");
+    void b.offsetWidth;
+    b.classList.add("flash");
+    clearTimeout(flash.t);
+    flash.t = setTimeout(() => b.classList.remove("flash"), 1000);
+  }
   function wiggle(meanness = 0.3, target = el.send) {
     const m = Math.max(0, Math.min(1, meanness));
+    if (m > 0) flash(m);
     target.style.setProperty("--amp", `${(4 + m * 26).toFixed(1)}px`);
     target.style.setProperty("--rot", `${(1 + m * 11).toFixed(1)}deg`);
     target.style.setProperty("--wiggle-dur", `${(0.45 + m * 0.65).toFixed(2)}s`);

@@ -34,6 +34,10 @@ function fakeRedis() {
           counters.set(key, v);
           reply(`:${v}\r\n`);
         } else if (cmd === "PEXPIRE") reply(":1\r\n");
+        else if (cmd === "GET") {
+          const v = counters.get(key);
+          reply(v == null ? "$-1\r\n" : `$${String(v).length}\r\n${v}\r\n`);
+        }
         else reply(`-ERR unknown command '${cmd}'\r\n`);
       }
     });
@@ -61,10 +65,13 @@ test("redis store: limiter enforces every window and the jev budget", async () =
     assert.equal(sendKeys.length, 2);
     assert.ok(sendKeys.some((k) => k.includes(":10000:")) && sendKeys.some((k) => k.includes(":600000:")));
 
+    assert.deepEqual(await store.jevBudget(), { used: 0, max: 2, preview_paused: false });
     assert.deepEqual(
       [await store.allow("jev", "room"), await store.allow("jev", "room"), await store.allow("jev", "room")],
       [true, true, false]
     );
+    // reads the same day bucket the limiter increments, capped at the budget
+    assert.deepEqual(await store.jevBudget(), { used: 2, max: 2, preview_paused: true });
     // IP limits are keyed separately from user limits
     assert.equal(await store.allow("send_ip", "1.2.3.4"), true);
     assert.ok([...counters.keys()].some((k) => k.includes("rl:send_ip:1.2.3.4:")));

@@ -85,3 +85,19 @@ test("memory store: room-wide jev budget resets at UTC midnight, not 24h after f
   t.mock.timers.tick(60_000); // 00:00 next day
   assert.equal(await store.allow("jev", "room"), true);
 });
+
+test("memory store: jevBudget reports today's spend and pauses the preview at 80%", async (t) => {
+  const DAY = 86_400_000;
+  const midnight = Math.ceil(Date.now() / DAY) * DAY;
+  t.mock.timers.enable({ apis: ["Date"], now: midnight + 2 * DAY }); // a fresh, untouched day
+  assert.deepEqual(await store.jevBudget(), { used: 0, max: 3, preview_paused: false });
+  await store.allow("jev", "room");
+  assert.deepEqual(await store.jevBudget(), { used: 1, max: 3, preview_paused: false });
+  await store.allow("jev", "room");
+  await store.allow("jev", "room");
+  assert.deepEqual(await store.jevBudget(), { used: 3, max: 3, preview_paused: true });
+  await store.allow("jev", "room"); // refused, but never reported above the cap
+  assert.equal((await store.jevBudget()).used, 3);
+  t.mock.timers.tick(DAY);
+  assert.deepEqual(await store.jevBudget(), { used: 0, max: 3, preview_paused: false });
+});

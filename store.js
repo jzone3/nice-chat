@@ -21,7 +21,10 @@ const REACTION_TTL_S = 60 * 60 * 24 * 30;
 // `jev` is keyed by a single constant and caps the room's total upstream Jev calls.
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN; // fixed UTC-day buckets
-const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 100_000;
+// 1.25M calls ≈ $100/day at Jev's $0.042 per million input tokens (~1,900 tokens per message check).
+const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 1_250_000;
+// Past this share of the day's budget the as-you-type preview pauses so real sends keep flowing.
+const JEV_PREVIEW_SHARE = Math.min(1, Math.max(0, Number(process.env.JEV_PREVIEW_SHARE) || 0.8));
 const LIMITS = {
   judge: [{ max: 8, windowMs: 5_000 }, { max: 150, windowMs: 10 * MIN }], // as-you-type checks
   judge_ip: [{ max: 300, windowMs: 10 * MIN }],
@@ -31,6 +34,12 @@ const LIMITS = {
   react: [{ max: 30, windowMs: 10_000 }, { max: 300, windowMs: 10 * MIN }],
   jev: [{ max: JEV_BUDGET_DAY, windowMs: DAY }],
 };
+
+const jevBudget = (used) => ({
+  used: Math.min(used, JEV_BUDGET_DAY),
+  max: JEV_BUDGET_DAY,
+  preview_paused: used >= JEV_BUDGET_DAY * JEV_PREVIEW_SHARE,
+});
 
 const pub = (u) => (u ? { name: u.name, emoji: u.emoji } : null);
 const fameSort = (a, b) => b.niceness - a.niceness || b.ts - a.ts;
@@ -198,6 +207,11 @@ function memoryStore() {
       }
       return ok;
     },
+    async jevBudget() {
+      const now = Date.now();
+      const h = hits.get(`jev:room:${DAY}`);
+      return jevBudget(h && h.reset > now ? h.n : 0);
+    },
     async bumpStats({ blocked, latency_ms }) {
       stats.requests++;
       stats.total_latency_ms += latency_ms || 0;
@@ -354,6 +368,10 @@ function redisStore(url) {
         })
       );
       return windows.every(({ max }, i) => Number(replies[i * 2]) <= max);
+    },
+    async jevBudget() {
+      const used = await r.exec(["GET", K.rl("jev", "room", `${DAY}:${Math.floor(Date.now() / DAY)}`)]);
+      return jevBudget(Number(used) || 0);
     },
     async bumpStats({ blocked, latency_ms }) {
       const cmds = [

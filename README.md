@@ -1,6 +1,6 @@
 # 💖 Nice Chat
 
-[Built with Devin](https://builtbydevin.ai/)
+Built with Devin · [By Jared](https://x.com/imjaredz)
 
 One big chat room. Everyone in the world. **Only nice messages get through.**
 
@@ -30,7 +30,7 @@ server when you hit send. Mean messages never land — the Send button just wigg
 ## How moderation works
 
 Jev is not a text-generating LLM — it returns calibrated probabilities that code can
-branch on. Each check is **one request with ten atomic questions** about the draft
+branch on. Each check is **one request with eleven atomic questions** about the draft
 (plus the last few room messages for context):
 
 | id | type | question |
@@ -45,12 +45,19 @@ branch on. Each check is **one request with ten atomic questions** about the dra
 | `is_derogatory_label` | Noul | A word used as a put-down / jeer (a bare "gay", "karen", "that's so autistic")? Sincere uses ("I'm gay and proud") are not. |
 | `is_hateful` | Noul | Contempt or stereotypes aimed at a group? |
 | `is_harassment_or_threat` | Noul | Harassing or threatening? |
+| `has_link` | Noul | Sharing or smuggling in a web address — spelled out, spaced out or obfuscated ("example dot com", "discord gg slash x", a handle to DM)? Mentioning a site as a plain noun is not. |
 | `tone` | Choice | warm / neutral / cold / hostile |
 | `niceness` | Score | 1 (mean) … 5 (lovely) |
 
 Plain code in [`jev.js`](jev.js) owns the thresholds and the final decision, and derives a
 0–1 `meanness` score that drives the wiggle. The browser calls `/api/judge` for the live
 preview, but `/api/send` always re-judges on the server, so nothing sneaks past.
+
+Links are the spam vector, so they are refused outright: a deterministic check in `jev.js`
+(`looksLikeLink`) catches schemes, `www.`, bare domains, IPs, shorteners and the usual disguises
+(`example dot com`, `example[.]com`, `example . com`, `hxxp`, leet TLDs, zero-width characters)
+without spending a Jev call; `has_link` above catches whatever is spelled out or spaced too
+creatively for a regex.
 
 ## Run it
 
@@ -63,7 +70,8 @@ npm start                     # http://localhost:3000
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
 `MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_DAY` (room-wide Jev
-calls per UTC day, default 100000), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
+calls per UTC day, default 1250000 ≈ $100/day), `JEV_PREVIEW_SHARE` (share of the budget after which the
+as-you-type preview pauses while sends keep working, default 0.8), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
 `REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
 
 ```bash
@@ -123,4 +131,4 @@ messages, hall of fame, presence, rate limits and Jev stats are all shared, so a
 
 ---
 
-Made with 💖 · [Built with Devin](https://builtbydevin.ai/)
+Made with 💖 · Built with Devin · [By Jared](https://x.com/imjaredz)
