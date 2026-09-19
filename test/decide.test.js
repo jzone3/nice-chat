@@ -248,3 +248,14 @@ test("Jev's has_link is a hard block that neither kindness nor laughter rescues"
   assert.equal(laughing.allowed, false);
   assert.equal(decide(answers({ has_link: { noul: 0.2 } })).allowed, true);
 });
+
+test("negativity blocks softly: 'keep it positive' with a mild wiggle, and kindness rescues it", () => {
+  const d = decide(answers({ is_negative: { noul: 0.95 }, is_kind: { noul: 0.2 }, tone: { choice: "neutral", probabilities: { warm: 0.1, neutral: 0.8, cold: 0.1, hostile: 0 } }, niceness: { score: 2 } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["is_negative"]);
+  assert.deepEqual(d.reasons, ["keep it positive"]);
+  assert.ok(d.meanness > 0.2 && d.meanness < 0.5, `meanness ${d.meanness}`);
+  assert.equal(decide(answers({ is_negative: { noul: 0.5 } })).allowed, true);
+  // "rough day, but this room cheers me up": negative-ish yet clearly kind
+  assert.equal(decide(answers({ is_negative: { noul: 0.75 }, is_kind: { noul: 0.9 } })).allowed, true);
+});

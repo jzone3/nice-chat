@@ -7,6 +7,7 @@
   },
   "rewrites": [
     { "source": "/healthz", "destination": "/api/index" },
+    { "source": "/logout", "destination": "/api/index" },
     { "source": "/api/(.*)", "destination": "/api/index" }
   ],
   "headers": [
