@@ -88,6 +88,15 @@ const QUESTIONS = {
       false: "No harassment or threat",
     },
   },
+  has_link: {
+    type: "noul",
+    instructions:
+      "Is `draft_message` sharing or smuggling in a web address — a URL, domain, link, shortener, or a handle plus platform to contact — even when it is spelled out, spaced out or obfuscated ('example dot com', 'bit ly slash abc', 'discord gg / xyz', 'example [.] com', 'hxxp', 'w w w dot', letters separated by spaces or emojis)? Mentioning a well-known site as a plain noun in conversation does not count.",
+    criteria: {
+      true: "Anything a reader could type into a browser or use to reach the sender elsewhere: 'check out example dot com', 'bit(dot)ly/abc', 'my discord: discord gg slash nice', 'dm me on telegram @spamguy', 'e x a m p l e . c o m', 'google \"cheap watches 4 u\" and click the first result'",
+      false: "Talking about the web without pointing anywhere: 'I saw a cute dog on youtube', 'just google it', 'the internet is wild today'; also version numbers (2.0.1), times (5.30), decimals (3.14), abbreviations (e.g., U.S., Mr.)",
+    },
+  },
   tone: {
     type: "choice",
     instructions: "What is the overall tone of `draft_message` toward the people in the chat?",
@@ -178,6 +187,7 @@ const THRESHOLDS = {
   is_hateful: 0.4,
   is_derogatory_label: 0.5,
   is_insult: 0.5,
+  has_link: 0.5,
   is_sarcastic_or_backhanded: 0.6,
   is_passive_aggressive: 0.65,
   hostile_tone_min_prob: 0.55, // tone == hostile with at least this probability
@@ -201,6 +211,7 @@ const REASON_LABELS = {
   is_hateful: "no hate here",
   is_derogatory_label: "that word is used to put people down",
   is_insult: "that's an insult",
+  has_link: "no links, please",
   is_sarcastic_or_backhanded: "sounds sarcastic",
   is_passive_aggressive: "a bit passive-aggressive",
   hostile: "hostile tone",
@@ -214,10 +225,74 @@ const REASON_LABELS = {
   name_negative: "pick something friendlier",
 };
 
-const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label", "is_insult"];
+const HARD_FLAGS = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label", "is_insult", "has_link"];
 // Laughter after a mishap reads as mocking to Jev (cold tone, low niceness, faint insult); the room
 // treats laughing as good, so only actual language violations survive the laughter rescue.
-const LAUGHTER_CANT_SAVE = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label"];
+const LAUGHTER_CANT_SAVE = ["is_harassment_or_threat", "is_profane_or_slur", "is_disguised_slur", "is_hateful", "is_derogatory_label", "has_link"];
+
+// ------------------------------------------------------------------- links
+// Links are the spam vector, so anything that parses as an address is refused before Jev is even
+// asked; Jev's `has_link` catches the spelled-out and creatively spaced forms this misses.
+// TLDs that are not English words count on their own ("example.com"); word-like ones (me, us, free,
+// live, ...) only count with a path, so "agree.me too" and "done.free pizza" pass but "t.me/spam"
+// does not. A dot with a space after it is only collapsed before the handful of TLDs that never
+// start a sentence ("example. com"), so "this. AI is cool" stays a sentence.
+const CORE_TLDS =
+  "com|net|org|io|ai|gg|xyz|ly|biz|info|tv|edu|gov|xxx|icu|ooo|fyi|vip|wtf|app|dev|tk|ml|ga|cf|gq|pw|ws|cc|co|uk|ru|cn|de|fr|jp|kr|br|mx|eu|ca|au|nl|se|ch|es|fm|im|la|nu|ee|sh|st|gd|gy|gl";
+const SPACED_TLDS = "com|net|org|xyz|biz|edu|gov|xxx|icu|ooo";
+const WORDY_TLDS =
+  "me|us|to|in|is|it|be|no|so|am|at|on|or|an|as|by|do|if|my|up|go|id|link|click|site|online|shop|store|club|live|life|world|tech|fun|space|website|page|video|news|today|win|pro|lol|zip|mov|cash|money|bet|casino|porn|sex|buzz|monster|cloud|host|network|email|group|team|chat|social|stream|download|free|top|rest|bar|ink|one|run|surf|wiki|pics|cam|date|loan|men|party|review|trade|work|rocks|ninja|guru";
+const LABEL = "[a-z0-9](?:[a-z0-9-]{0,61}[a-z0-9])?";
+const LINK_RES = [
+  /(?:https?|ftps?|sftp|wss?|file):\/\/\S/, // any scheme
+  /(?:^|[^a-z0-9])www\d?\.[a-z0-9]/, // www. without a scheme
+  new RegExp(`(?:^|[^a-z0-9.])(?:${LABEL}\\.)+(?:${CORE_TLDS})(?![a-z0-9-])`),
+  new RegExp(`(?:^|[^a-z0-9.])(?:${LABEL}\\.)+(?:${WORDY_TLDS})\\/[a-z0-9]`),
+  /(?:^|[^0-9.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9])/, // bare IPv4
+];
+const SPACED_DOT_RE = new RegExp(`(?<=[a-z0-9])\\s*\\.\\s+(?=(?:${SPACED_TLDS})(?![a-z0-9-]))`, "g");
+
+// Undo the usual disguises so the regexes above see a plain address.
+function normalizeForLinks(text) {
+  return text
+    .toLowerCase()
+    .replace(/[\u200b-\u200f\u2060\ufeff]/g, "") // zero-width joiners hidden inside words
+    .replace(/[\u3002\uff0e\u2024\u00b7\u2022]/g, ".") // 。 ． ․ · • stand-ins for a dot
+    .replace(/h[x*]{2}ps?(?=\s*:)/g, "http") // hxxp://
+    .replace(/\s*:\s*\/\s*\/\s*/g, "://") // http : / / example
+    .replace(/(?<=[a-z0-9])\s*[\[\(\{<]\s*(?:d[o0]t|\.)\s*[\]\)\}>]\s*(?=[a-z0-9])/g, ".") // example[.]com, example (dot) com
+    .replace(/(?<=[a-z0-9])\s+d[o0]t\s+(?=[a-z0-9])/g, ".") // example dot com
+    .replace(/(?<=[a-z0-9])\s+(?:slash|\/)\s+(?=[a-z0-9])/g, "/") // bit.ly slash abc
+    .replace(SPACED_DOT_RE, ".") // example . com / example. com
+    .replace(/\.c[0o]m(?![a-z0-9])/g, ".com") // leet TLDs
+    .replace(/\.[0o]rg(?![a-z0-9])/g, ".org")
+    .replace(/\.n[3e]t(?![a-z0-9])/g, ".net");
+}
+
+function looksLikeLink(text) {
+  const t = normalizeForLinks(text);
+  return LINK_RES.some((re) => re.test(t));
+}
+
+// Verdict shape for a draft refused on sight, so the UI treats it exactly like a Jev block.
+function linkVerdict() {
+  return {
+    allowed: false,
+    reasons: [REASON_LABELS.has_link],
+    hits: ["has_link"],
+    niceness: null,
+    tone: null,
+    tone_probs: null,
+    niceness_probs: null,
+    kind: null,
+    meanness: 0.45,
+    flags: { has_link: 1 },
+    latency_ms: 0,
+    cached: false,
+    skipped: false,
+    link: true,
+  };
+}
 
 // ------------------------------------------------------------------ decide
 function decide(answers) {
@@ -363,6 +438,10 @@ async function callJev(body, reserve, attempt = 0) {
  */
 async function judge(draft, context = [], { force = false, reserve } = {}) {
   const text = draft.trim();
+  if (looksLikeLink(text)) {
+    if (force) stats.blocked++;
+    return linkVerdict();
+  }
   if (!force && wordCount(text) < 3) {
     return { allowed: true, reasons: [], niceness: null, tone: null, latency_ms: 0, skipped: true };
   }
@@ -415,4 +494,4 @@ async function judgeName(name, { reserve } = {}) {
   return result;
 }
 
-module.exports = { QUESTIONS, NAME_QUESTIONS, THRESHOLDS, MODEL, decide, decideName, judge, judgeName, getStats };
+module.exports = { QUESTIONS, NAME_QUESTIONS, THRESHOLDS, MODEL, decide, decideName, judge, judgeName, looksLikeLink, getStats };

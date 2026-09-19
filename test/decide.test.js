@@ -1,6 +1,6 @@
 const test = require("node:test");
 const assert = require("node:assert");
-const { decide, decideName, judge } = require("../jev");
+const { decide, decideName, judge, looksLikeLink } = require("../jev");
 
 function answers(over = {}) {
   const base = {
@@ -185,4 +185,58 @@ test("a confidently negative vibe blocks a name even with no flag fired", () => 
 test("an edgy-but-harmless name with a weak negative lean is allowed", () => {
   const d = decideName(nameAnswers({ name_is_hostile: { noul: 0.3 }, name_vibe: { choice: "negative", probabilities: { positive: 0.1, neutral: 0.45, negative: 0.45 } } }));
   assert.equal(d.allowed, true);
+});
+
+// ------------------------------------------------------------------ links
+const LINKS = [
+  "https://example.com", "http://example.com/path?x=1", "www.example.com", "check example.com",
+  "example dot com", "example[.]com", "example (dot) com", "example . com", "example. com pls",
+  "go to Example DOT Com now", "bit.ly/abc", "t.me/spam", "youtu.be/xyz", "discord.gg/nice",
+  "hxxp://evil.test", "http : / / evil . com", "192.168.0.1", "spam.free/deal", "EXAMPLE.C0M",
+  "example d0t c0m", "my site tinyurl.com/x", "visit example。com", "ex\u200bample.com",
+  "email me at bob@example.com", "www2.example.org", "a dot com company",
+];
+const NOT_LINKS = [
+  "hi.", "hello everyone!", "I saw a cute dog on youtube", "just google it", "3.14 is pi", "version 2.10 is out",
+  "see you at 5.30", "e.g. this one", "U.S. and U.K.", "Mr. Smith is nice", "I agree. Me too",
+  "great. Free pizza tomorrow", "this. AI is cool", "done.free pizza", "agree.me too", "love node.js and next.js",
+  "Ph.D. student here", "wow...so cool", "yes. Co-worker of mine", "haha.love it", "what. WTF", "got it. Info coming",
+  "I said no. De nada", "sure. FYI I am leaving", "connect the dot to the line", "cost is 10.5 in total", "1.2.3 go!",
+  "Dr. Who is great", "etc. and so on", "lol. me too", "ok.so what now", "score 3.2.1",
+];
+
+test("looksLikeLink catches plain and disguised addresses", () => {
+  const missed = LINKS.filter((s) => !looksLikeLink(s));
+  assert.deepEqual(missed, [], `not detected:\n${missed.join("\n")}`);
+});
+
+test("looksLikeLink leaves ordinary punctuation, numbers and abbreviations alone", () => {
+  const wrong = NOT_LINKS.filter((s) => looksLikeLink(s));
+  assert.deepEqual(wrong, [], `false positives:\n${wrong.join("\n")}`);
+});
+
+test("judge: a draft with a link is refused before Jev is asked, even when short", async (t) => {
+  process.env.TYPESAFE_API_KEY ||= "test-key";
+  const fetchMock = t.mock.method(globalThis, "fetch", async () => { throw new Error("no network in unit tests"); });
+  let asked = 0;
+  const v = await judge("bit.ly/abc", [], { reserve: async () => (asked++, true) });
+  assert.strictEqual(v.allowed, false);
+  assert.deepEqual(v.hits, ["has_link"]);
+  assert.deepEqual(v.reasons, ["no links, please"]);
+  assert.strictEqual(v.skipped, false);
+  assert.strictEqual(asked, 0);
+  assert.strictEqual(fetchMock.mock.callCount(), 0);
+  const forced = await judge("see https://example.com", [], { force: true, reserve: async () => (asked++, true) });
+  assert.strictEqual(forced.allowed, false);
+  assert.strictEqual(asked, 0);
+});
+
+test("Jev's has_link is a hard block that neither kindness nor laughter rescues", () => {
+  const d = decide(answers({ has_link: { noul: 0.8 } }));
+  assert.equal(d.allowed, false);
+  assert.deepEqual(d.hits, ["has_link"]);
+  assert.deepEqual(d.reasons, ["no links, please"]);
+  const laughing = decide(answers({ has_link: { noul: 0.8 }, is_laughter: { noul: 0.95 } }));
+  assert.equal(laughing.allowed, false);
+  assert.equal(decide(answers({ has_link: { noul: 0.2 } })).allowed, true);
 });

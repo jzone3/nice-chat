@@ -31,6 +31,7 @@
     is_derogatory_label: "put-down label",
     is_hateful: "hateful",
     is_harassment_or_threat: "harass/threat",
+    has_link: "link",
   };
   const FACES = ["😡", "😒", "😐", "😊", "🥰"];
   const REACTIONS = ["❤️", "😂"];
@@ -460,7 +461,8 @@
     const text = el.draft.value;
     seq++;
     judgeCtl?.abort();
-    if (words(text) < 3) { latest = null; setVerdict(text.trim() ? { skipped: true } : null); renderLive(null); return; }
+    // Short drafts skip Jev, but one that could be an address still goes to the server's link check.
+    if (words(text) < 3 && !/[./:@]/.test(text)) { latest = null; setVerdict(text.trim() ? { skipped: true } : null); renderLive(null); return; }
     const mySeq = seq;
     judgeCtl = new AbortController();
     setVerdict(null, { thinking: true });

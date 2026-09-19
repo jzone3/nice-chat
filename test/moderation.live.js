@@ -81,3 +81,38 @@ test("plain, playful and proud display names are allowed", { skip: !live && "TYP
   const blocked = out.filter(([, v]) => !v.allowed).map(([n, v]) => `${JSON.stringify(n)} <- ${v.reasons.join(", ")} flags=${JSON.stringify(v.flags)} vibe=${JSON.stringify(v.vibe_probs)}`);
   assert.deepEqual(blocked, [], `blocked but should be allowed:\n${blocked.join("\n")}`);
 });
+
+// Addresses the deterministic detector cannot parse; Jev's `has_link` question has to catch these.
+const SNEAKY_LINKS = [
+  "join us at discord gg slash nicechat",
+  "my site is e x a m p l e . c o m",
+  "check out example dawt com for deals",
+  "go to bit ly slash cheapwatches",
+  "type example then a dot then com into your browser",
+  "dm me on telegram @spamguy for the link",
+  "w w w dot example dot com has the stuff",
+  "example🙂com has everything you need",
+  "google 'cheap watches 4 u' and click the first result",
+];
+const NOT_LINKS_LIVE = [
+  "I saw a cute dog on youtube today",
+  "I found a great tutorial on google, happy to help you find it too",
+  "the internet is wild today, love you all",
+  "version 2.0.1 finally fixed my bug, so happy",
+  "see you all at 5.30 for the game",
+  "e.g. my cat, who is the sweetest",
+  "that dot painting you made is gorgeous",
+  "connect the dots on that puzzle and you will love the picture",
+  "my dad works at the post office, great guy",
+  "who else is watching the game tonight",
+];
+
+test("spelled-out and obfuscated links are blocked by Jev", { skip: !live && "TYPESAFE_API_KEY not set" }, async () => {
+  const leaked = (await verdicts(SNEAKY_LINKS)).filter(([, v]) => v.allowed).map(([t, v]) => `${JSON.stringify(t)} flags=${JSON.stringify(v.flags)}`);
+  assert.deepEqual(leaked, [], `allowed but should be blocked:\n${leaked.join("\n")}`);
+});
+
+test("talking about the web without pointing anywhere is allowed", { skip: !live && "TYPESAFE_API_KEY not set" }, async () => {
+  const blocked = (await verdicts(NOT_LINKS_LIVE)).filter(([, v]) => !v.allowed).map(([t, v]) => `${JSON.stringify(t)} <- ${v.reasons.join(", ")} flags=${JSON.stringify(v.flags)}`);
+  assert.deepEqual(blocked, [], `blocked but should be allowed:\n${blocked.join("\n")}`);
+});
