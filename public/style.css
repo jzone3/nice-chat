@@ -130,17 +130,20 @@ h2 { font-size: 1.05rem; }
 .msg .probs { display: none; }
 
 /* reactions */
-.msg .reacts { display: flex; gap: 0.35rem; margin-top: 0.4rem; }
+.msg .reacts { display: flex; justify-content: flex-end; gap: 0.35rem; margin-top: 0.4rem; }
+/* gray ghost until you click it; lights up in color once it's yours */
 .react {
   display: inline-flex; align-items: center; gap: 0.25rem; padding: 0.1rem 0.55rem; min-width: 2.2rem;
-  background: var(--paper); border: 2px solid var(--line); border-radius: 999px; cursor: pointer;
-  font-size: 0.85rem; line-height: 1.3; transition: transform 0.15s, background 0.15s;
+  background: transparent; border: 2px solid var(--muted); border-radius: 999px; cursor: pointer;
+  color: var(--muted); filter: grayscale(1); opacity: 0.55;
+  font-size: 0.85rem; line-height: 1.3; transition: transform 0.15s, background 0.15s, opacity 0.15s, filter 0.15s;
 }
-@media (hover: hover) { .react:hover { transform: translateY(-1px) scale(1.06); } }
+@media (hover: hover) { .react:hover { transform: translateY(-1px) scale(1.06); opacity: 0.85; } }
 .react:disabled { cursor: progress; }
 .react .n { font-weight: 700; font-size: 0.8rem; }
 .react .n:empty { display: none; }
-.react.on { background: var(--lemon); border-color: var(--ink); box-shadow: 0 2px 0 var(--ink); }
+.react.has { opacity: 0.8; }
+.react.on { background: var(--lemon); border-color: var(--ink); color: var(--ink); filter: none; opacity: 1; box-shadow: 0 2px 0 var(--ink); }
 .react.pop .e { animation: react-pop 0.4s cubic-bezier(0.2, 1.6, 0.4, 1); display: inline-block; }
 @keyframes react-pop { 0% { transform: scale(0.6); } 60% { transform: scale(1.5) rotate(-10deg); } 100% { transform: scale(1); } }
 
@@ -310,8 +313,8 @@ body.debug .prob.hot .bar i { background: #ff3b3b; box-shadow: 0 0 8px #ff3b3b; 
 body.debug .stats dl div { background: #030503; }
 body.debug .toast { background: #39ff14; color: #050805; text-shadow: none; }
 body.debug .nice-badge { background: #030503; }
-body.debug .react { background: #030503; border-radius: 4px; }
-body.debug .react.on { background: #123312; border-color: #39ff14; box-shadow: 0 0 8px #39ff14; }
+body.debug .react { background: #030503; border-color: #1f5f1f; color: #6fbf6f; border-radius: 4px; }
+body.debug .react.on { background: #123312; border-color: #39ff14; color: #39ff14; box-shadow: 0 0 8px #39ff14; }
 body.debug .debug-toggle input:checked + .switch::after { background: #050805; }
 body.debug .modal { background: rgba(0, 0, 0, 0.8); }
 body.debug .join { background: var(--paper); }

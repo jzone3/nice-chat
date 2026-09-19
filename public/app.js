@@ -300,6 +300,7 @@
         const r = rx[b.dataset.emoji];
         if (!r || typeof r !== "object") continue;
         b.querySelector(".n").textContent = r.n > 0 ? r.n : "";
+        b.classList.toggle("has", r.n > 0);
         if (r.me !== undefined) b.classList.toggle("on", r.me);
       }
     }
