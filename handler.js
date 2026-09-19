@@ -75,8 +75,8 @@ function isSecure(req) {
   return (TRUST_PROXY && req.headers["x-forwarded-proto"] === "https") || req.socket.encrypted;
 }
 
-function setUidCookie(req, uid) {
-  const parts = [`${COOKIE}=${uid}`, "Path=/", `Max-Age=${60 * 60 * 24 * 365}`, "HttpOnly", "SameSite=Lax"];
+function setUidCookie(req, uid, maxAge = 60 * 60 * 24 * 365) {
+  const parts = [`${COOKIE}=${uid}`, "Path=/", `Max-Age=${maxAge}`, "HttpOnly", "SameSite=Lax"];
   if (isSecure(req)) parts.push("Secure");
   return { "Set-Cookie": parts.join("; ") };
 }
@@ -192,6 +192,12 @@ async function handle(req, res) {
     if (req.method === "GET" && url.pathname === "/healthz") {
       const [p, n] = await Promise.all([store.presence(), store.messageCount()]);
       return send(res, 200, { ok: true, online: p.online, messages: n, store: store.kind, transport: TRANSPORT, jev_key: Boolean(process.env.TYPESAFE_API_KEY) });
+    }
+
+    // Unlinked escape hatch: drop the identity cookie and land on the join screen.
+    if (req.method === "GET" && url.pathname === "/logout") {
+      res.writeHead(303, { Location: "/", "Cache-Control": "no-store", ...setUidCookie(req, "", 0) });
+      return res.end();
     }
 
     if (req.method === "GET" && !url.pathname.startsWith("/api/")) {
