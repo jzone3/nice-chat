@@ -91,9 +91,9 @@ const QUESTIONS = {
   has_link: {
     type: "noul",
     instructions:
-      "Is `draft_message` sharing or smuggling in a web address — a URL, domain, link, shortener, or a handle plus platform to contact — even when it is spelled out, spaced out or obfuscated ('example dot com', 'bit ly slash abc', 'discord gg / xyz', 'example [.] com', 'hxxp', 'w w w dot', letters separated by spaces or emojis)? Mentioning a well-known site as a plain noun in conversation does not count.",
+      "Is `draft_message` sharing or smuggling in a web address — a URL, domain, link, shortener, IP address or server to connect to, or a handle plus platform to contact — even when it is spelled out, spaced out or obfuscated ('example dot com', 'bit ly slash abc', 'discord gg / xyz', 'example [.] com', 'hxxp', 'w w w dot', letters separated by spaces or emojis)? Mentioning a well-known site as a plain noun in conversation does not count.",
     criteria: {
-      true: "Anything a reader could type into a browser or use to reach the sender elsewhere: 'check out example dot com', 'bit(dot)ly/abc', 'my discord: discord gg slash nice', 'dm me on telegram @spamguy', 'e x a m p l e . c o m', 'google \"cheap watches 4 u\" and click the first result'",
+      true: "Anything a reader could type into a browser or use to reach the sender elsewhere: 'check out example dot com', 'bit(dot)ly/abc', 'my discord: discord gg slash nice', 'dm me on telegram @spamguy', 'e x a m p l e . c o m', 'my server is at 45.33.32.156', 'connect to 192.168.0.1 for the game', 'google \"cheap watches 4 u\" and click the first result'",
       false: "Talking about the web without pointing anywhere: 'I saw a cute dog on youtube', 'just google it', 'the internet is wild today'; also version numbers (2.0.1), times (5.30), decimals (3.14), abbreviations (e.g., U.S., Mr.)",
     },
   },
@@ -248,8 +248,11 @@ const LINK_RES = [
   /(?:^|[^a-z0-9])www\d?\.[a-z0-9]/, // www. without a scheme
   new RegExp(`(?:^|[^a-z0-9.])(?:${LABEL}\\.)+(?:${CORE_TLDS})(?![a-z0-9-])`),
   new RegExp(`(?:^|[^a-z0-9.])(?:${LABEL}\\.)+(?:${WORDY_TLDS})\\/[a-z0-9]`),
-  /(?:^|[^0-9.])(?:\d{1,3}\.){3}\d{1,3}(?![0-9])/, // bare IPv4
 ];
+const OCTET = "(?:25[0-5]|2[0-4]\\d|1\\d\\d|[1-9]?\\d)";
+// Bare IPv4 with valid octets; a version like 1.2.3.4 is indistinguishable from an address, so it
+// only counts with something that makes it navigable (a port, path or scheme handled above).
+const IPV4_RE = new RegExp(`(?:^|[^0-9.])${OCTET}(?:\\.${OCTET}){3}(?::\\d{2,5}|\\/[a-z0-9])`);
 const SPACED_DOT_RE = new RegExp(`(?<=[a-z0-9])\\s*\\.\\s+(?=(?:${SPACED_TLDS})(?![a-z0-9-]))`, "g");
 
 // Undo the usual disguises so the regexes above see a plain address.
@@ -271,8 +274,11 @@ function normalizeForLinks(text) {
 
 function looksLikeLink(text) {
   const t = normalizeForLinks(text);
-  return LINK_RES.some((re) => re.test(t));
+  return LINK_RES.some((re) => re.test(t)) || IPV4_RE.test(t);
 }
+
+// A link is spam, not cruelty: a firm but not furious wiggle.
+const LINK_MEANNESS = 0.45;
 
 // Verdict shape for a draft refused on sight, so the UI treats it exactly like a Jev block.
 function linkVerdict() {
@@ -285,12 +291,12 @@ function linkVerdict() {
     tone_probs: null,
     niceness_probs: null,
     kind: null,
-    meanness: 0.45,
+    meanness: LINK_MEANNESS,
     flags: { has_link: 1 },
     latency_ms: 0,
     cached: false,
     skipped: false,
-    link: true,
+    local: true, // decided here, not by Jev: callers keep it out of Jev request/latency stats
   };
 }
 
@@ -341,7 +347,8 @@ function decide(answers) {
     flags.is_derogatory_label ?? 0,
     toneProbs.hostile ?? 0,
     0.8 * (flags.is_sarcastic_or_backhanded ?? 0),
-    0.7 * (flags.is_passive_aggressive ?? 0)
+    0.7 * (flags.is_passive_aggressive ?? 0),
+    (flags.has_link ?? 0) >= THRESHOLDS.has_link ? LINK_MEANNESS : 0
   );
 
   reasons.sort((a, b) => b.p - a.p);
@@ -390,7 +397,7 @@ function decideName(answers) {
 const cache = new Map(); // exact state string -> result
 const nameCache = new Map(); // username -> result
 const CACHE_MAX = 5000;
-const stats = { requests: 0, total_latency_ms: 0, blocked: 0, allowed: 0, input_tokens: 0, output_tokens: 0, errors: 0 };
+const stats = { requests: 0, total_latency_ms: 0, blocked: 0, allowed: 0, link_blocks: 0, input_tokens: 0, output_tokens: 0, errors: 0 };
 
 function getStats() {
   return {
@@ -439,7 +446,7 @@ async function callJev(body, reserve, attempt = 0) {
 async function judge(draft, context = [], { force = false, reserve } = {}) {
   const text = draft.trim();
   if (looksLikeLink(text)) {
-    if (force) stats.blocked++;
+    if (force) stats.link_blocks++;
     return linkVerdict();
   }
   if (!force && wordCount(text) < 3) {

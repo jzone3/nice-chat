@@ -93,12 +93,16 @@ const SNEAKY_LINKS = [
   "w w w dot example dot com has the stuff",
   "example🙂com has everything you need",
   "google 'cheap watches 4 u' and click the first result",
+  "join my minecraft server at 51.222.10.4",
+  "my server is at 45.33.32.156 come visit",
 ];
 const NOT_LINKS_LIVE = [
   "I saw a cute dog on youtube today",
   "I found a great tutorial on google, happy to help you find it too",
   "the internet is wild today, love you all",
   "version 2.0.1 finally fixed my bug, so happy",
+  "version 1.2.3.4 is ready, great work everyone",
+  "we shipped build 10.0.19041.1234 today, so proud",
   "see you all at 5.30 for the game",
   "e.g. my cat, who is the sweetest",
   "that dot painting you made is gorgeous",

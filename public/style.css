@@ -195,8 +195,10 @@ body.quake .layout { animation: quake 0.5s ease-out both; }
   60% { transform: translate(-4px, 2px); }
   80% { transform: translate(4px, -2px); }
 }
-body.quake::after { content: ""; position: fixed; inset: 0; pointer-events: none; background: rgba(255, 107, 138, 0.35); animation: flash 0.5s ease-out both; }
-@keyframes flash { from { opacity: 1; } to { opacity: 0; } }
+/* red flash on every rejection; --flash-a (opacity) and duration scale with meanness */
+body.flash::after { content: ""; position: fixed; inset: 0; z-index: 30; pointer-events: none; background: #ff3b5c; animation: flash var(--flash-dur, 0.5s) ease-out both; }
+@keyframes flash { 0% { opacity: var(--flash-a, 0.3); } 15% { opacity: var(--flash-a, 0.3); } 100% { opacity: 0; } }
+body.debug.flash::after { background: #ff3b3b; mix-blend-mode: screen; }
 
 .verdict { display: flex; align-items: center; gap: 0.7rem; margin-top: 0.6rem; min-height: 2rem; }
 .verdict-face { font-size: 1.7rem; line-height: 1; transition: transform 0.2s; }
@@ -240,6 +242,7 @@ body.debug .prob.detail { display: grid; }
 .stats dl div { background: var(--sky); border: 2px solid var(--line); border-radius: 12px; padding: 0.3rem 0.6rem; }
 .stats dt { font-size: 0.75rem; color: var(--muted); }
 .stats dd { margin: 0; font-weight: 700; }
+.stats dl .wide { grid-column: 1 / -1; }
 
 /* ---------------------------------------------------------------- footer */
 .foot { display: flex; justify-content: center; align-items: center; gap: 0.6rem; padding: 0 1rem 0.8rem; font-size: 0.75rem; color: var(--muted); }
@@ -270,7 +273,7 @@ body.debug .prob.detail { display: grid; }
 .join-err { min-height: 1.2rem; margin: 0.4rem 0 0; color: #c0304f; font-weight: 700; }
 .join-fine { margin: 0.3rem 0 0; font-size: 0.8rem; color: var(--muted); }
 
-.toast { position: fixed; left: 50%; bottom: 5.5rem; transform: translate(-50%, 20px); opacity: 0; padding: 0.6rem 1.2rem; background: var(--ink); color: #fff; border-radius: 999px; font-weight: 700; transition: all 0.25s; pointer-events: none; z-index: 20; max-width: 90vw; }
+.toast { position: fixed; left: 50%; top: calc(0.9rem + env(safe-area-inset-top)); transform: translate(-50%, -24px); opacity: 0; padding: 0.6rem 1.2rem; background: var(--ink); color: #fff; border-radius: 999px; font-weight: 700; transition: all 0.25s; pointer-events: none; z-index: 20; max-width: 90vw; }
 .toast.show { opacity: 1; transform: translate(-50%, 0); }
 
 /* ---------------------------------------------------------------- responsive */
@@ -438,7 +441,6 @@ body.debug .join { background: var(--paper); }
   /* footer: tiny, but still there */
   .foot { flex-shrink: 0; gap: 0.4rem; padding: 0 0.5rem calc(0.15rem + env(safe-area-inset-bottom)); font-size: 0.72rem; }
   .foot img { height: 18px; }
-  .toast { bottom: 6.5rem; }
 
   /* join card: fits, scrolls inside the modal when the keyboard eats the screen */
   .modal { display: flex; padding: max(0.6rem, env(safe-area-inset-top)) 0.6rem max(0.6rem, env(safe-area-inset-bottom)); overflow-y: auto; overscroll-behavior: contain; }

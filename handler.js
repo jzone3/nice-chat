@@ -108,7 +108,7 @@ async function gatedJudge(draft, context, opts = {}) {
   jevInflight++;
   try {
     const verdict = await judge(draft, context, { ...opts, reserve: reserveJev });
-    if (!verdict.cached && !verdict.skipped) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
+    if (!verdict.cached && !verdict.skipped && !verdict.local) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
     return verdict;
   } finally {
     jevInflight--;
@@ -132,7 +132,7 @@ async function gatedJudgeName(name) {
 }
 
 async function stats() {
-  return { ...(await store.stats()), model: MODEL };
+  return { ...(await store.stats()), budget: await store.jevBudget(), model: MODEL };
 }
 
 function publicUser(u) {
@@ -276,6 +276,9 @@ async function handle(req, res) {
       const { draft = "" } = await readJson(req);
       if (typeof draft !== "string") return send(res, 400, { error: "Bad draft" });
       if (draft.length > MAX_TEXT) return send(res, 400, { error: `Keep it under ${MAX_TEXT} characters` });
+      // The live preview is the bulk of Jev spend; once most of the day's budget is gone it pauses so
+      // the remainder is kept for actual sends (which are always judged).
+      if ((await store.jevBudget()).preview_paused) return send(res, 200, { skipped: true, preview_paused: true, stats: await stats() });
       const verdict = await gatedJudge(draft, await store.recent(3));
       return send(res, 200, { ...verdict, stats: await stats() });
     }

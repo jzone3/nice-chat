@@ -70,7 +70,8 @@ npm start                     # http://localhost:3000
 
 Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DATA_FILE`,
 `MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_DAY` (room-wide Jev
-calls per UTC day, default 100000), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
+calls per UTC day, default 1250000 ≈ $100/day), `JEV_PREVIEW_SHARE` (share of the budget after which the
+as-you-type preview pauses while sends keep working, default 0.8), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
 `REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
 
 ```bash

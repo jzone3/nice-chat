@@ -192,7 +192,7 @@ const LINKS = [
   "https://example.com", "http://example.com/path?x=1", "www.example.com", "check example.com",
   "example dot com", "example[.]com", "example (dot) com", "example . com", "example. com pls",
   "go to Example DOT Com now", "bit.ly/abc", "t.me/spam", "youtu.be/xyz", "discord.gg/nice",
-  "hxxp://evil.test", "http : / / evil . com", "192.168.0.1", "spam.free/deal", "EXAMPLE.C0M",
+  "hxxp://evil.test", "http : / / evil . com", "192.168.0.1:8080", "45.33.32.156/deal", "http://10.0.0.1", "spam.free/deal", "EXAMPLE.C0M",
   "example d0t c0m", "my site tinyurl.com/x", "visit example。com", "ex\u200bample.com",
   "email me at bob@example.com", "www2.example.org", "a dot com company",
 ];
@@ -203,6 +203,7 @@ const NOT_LINKS = [
   "Ph.D. student here", "wow...so cool", "yes. Co-worker of mine", "haha.love it", "what. WTF", "got it. Info coming",
   "I said no. De nada", "sure. FYI I am leaving", "connect the dot to the line", "cost is 10.5 in total", "1.2.3 go!",
   "Dr. Who is great", "etc. and so on", "lol. me too", "ok.so what now", "score 3.2.1",
+  "version 1.2.3.4 is ready", "999.999.999.999 lol", "build 10.0.19041.1234 shipped",
 ];
 
 test("looksLikeLink catches plain and disguised addresses", () => {
@@ -229,6 +230,13 @@ test("judge: a draft with a link is refused before Jev is asked, even when short
   const forced = await judge("see https://example.com", [], { force: true, reserve: async () => (asked++, true) });
   assert.strictEqual(forced.allowed, false);
   assert.strictEqual(asked, 0);
+  assert.strictEqual(forced.local, true);
+});
+
+test("a Jev-detected link wiggles as hard as a regex-detected one", () => {
+  const d = decide(answers({ has_link: { noul: 0.9 }, is_kind: { noul: 0.9 }, niceness: { score: 3.5 } }));
+  assert.equal(d.allowed, false);
+  assert.ok(d.meanness >= 0.45, `meanness ${d.meanness}`);
 });
 
 test("Jev's has_link is a hard block that neither kindness nor laughter rescues", () => {
