@@ -237,6 +237,8 @@ body.debug .prob.detail { display: grid; }
 .fame li { margin-bottom: 0.35rem; }
 .fame .who { font-weight: 700; }
 .fame .score { color: var(--muted); font-size: 0.8rem; }
+.fame .countdown { float: right; font-size: 0.75rem; font-weight: 400; color: var(--muted); font-variant-numeric: tabular-nums; margin-top: 0.15rem; }
+.fame .fame-empty { list-style: none; margin-left: -1.3rem; color: var(--muted); font-style: italic; }
 
 .stats dl { display: grid; grid-template-columns: 1fr 1fr; gap: 0.4rem; margin: 0.3rem 0 0.5rem; }
 .stats dl div { background: var(--sky); border: 2px solid var(--line); border-radius: 12px; padding: 0.3rem 0.6rem; }

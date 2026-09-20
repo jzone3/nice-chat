@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=28" />
+  <link rel="stylesheet" href="style.css?v=30" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -70,7 +70,8 @@
         <button type="button" class="rail-close" id="rail-close" aria-label="Close">✕</button>
       </div>
       <section class="card fame">
-        <h2>🏆 Nicest things said</h2>
+        <h2>🏆 Nicest things said <span class="countdown" id="fame-reset"></span></h2>
+        <p class="hint">A fresh board every hour.</p>
         <ol id="fame"></ol>
       </section>
 
@@ -145,6 +146,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=28"></script>
+  <script src="app.js?v=30"></script>
 </body>
 </html>

@@ -6,7 +6,7 @@
     sendLabel: document.querySelector(".send-label"), sendEmoji: document.querySelector(".send-emoji"),
     verdict: $("verdict"), face: $("verdict-face"), meter: $("meter-fill"), vtext: $("verdict-text"), chars: $("chars"), reasons: $("reasons"),
     meEmoji: $("me-emoji"), online: $("online-count"), faces: $("faces"), debug: $("debug-toggle"),
-    liveHint: $("live-hint"), liveProbs: $("live-probs"), liveMeta: $("live-meta"), fame: $("fame"),
+    liveHint: $("live-hint"), liveProbs: $("live-probs"), liveMeta: $("live-meta"), fame: $("fame"), fameReset: $("fame-reset"),
     sReq: $("s-requests"), sBlocked: $("s-blocked"), sLat: $("s-latency"), sModel: $("s-model"), sBudget: $("s-budget"),
     modal: $("join-modal"), joinForm: $("join-form"), joinName: $("join-name"), grid: $("emoji-grid"), shuffle: $("shuffle"),
     pvEmoji: document.querySelector(".pv-emoji"), pvName: document.querySelector(".pv-name"), joinErr: $("join-err"), joinBtn: $("join-btn"),
@@ -234,11 +234,12 @@
 
   function applyHistory(d) {
     if (!joinedAt) joinedAt = d.now || Date.now();
+    if (d.now) clockSkew = d.now - Date.now();
     el.thread.querySelectorAll(".msg").forEach((n) => n.remove());
     for (const m of d.messages) addMessage(m, false);
     applyReactions(d.reactions);
     scrollDown(true);
-    renderFame(d.fame);
+    renderFame(d.fame, d.fame_reset);
     renderPresence(d.presence);
     renderStats(d.stats);
   }
@@ -251,7 +252,7 @@
     es.addEventListener("message", (ev) => {
       const d = JSON.parse(ev.data);
       addMessage(d.message, true);
-      renderFame(d.fame);
+      renderFame(d.fame, d.fame_reset);
     });
     es.addEventListener("presence", (ev) => renderPresence(JSON.parse(ev.data)));
     es.addEventListener("reactions", (ev) => {
@@ -269,9 +270,10 @@
       if (!ok) { el.online.textContent = "…"; return; }
       if (data.full) applyHistory(data);
       else {
+        if (data.now) clockSkew = data.now - Date.now();
         for (const m of data.messages) addMessage(m, true);
         applyReactions(data.reactions);
-        renderFame(data.fame);
+        renderFame(data.fame, data.fame_reset);
         renderPresence(data.presence);
         renderStats(data.stats);
       }
@@ -394,7 +396,37 @@
     }
   }
 
-  function renderFame(list) {
+  // The board is per clock hour; the server says when the current one ends. Between polls the
+  // countdown ticks locally and the list clears the moment the hour turns.
+  let fameResetAt = 0;
+  let clockSkew = 0; // server now - local now
+  function tickFameClock() {
+    if (!fameResetAt) return;
+    const left = fameResetAt - (Date.now() + clockSkew);
+    if (left <= 0) {
+      if (!el.fame.querySelector(".fame-empty")) showEmptyFame();
+      el.fameReset.textContent = "new hour, new board!";
+      return;
+    }
+    const m = Math.floor(left / 60000);
+    const s = Math.floor((left % 60000) / 1000);
+    el.fameReset.textContent = `resets in ${m}:${String(s).padStart(2, "0")}`;
+  }
+  setInterval(tickFameClock, 1000);
+
+  function showEmptyFame() {
+    const li = document.createElement("li");
+    li.className = "fame-empty";
+    li.textContent = "fresh board — say something lovely to claim the top spot";
+    el.fame.replaceChildren(li);
+  }
+
+  function renderFame(list, resetAt) {
+    if (resetAt) {
+      fameResetAt = resetAt;
+      tickFameClock();
+    }
+    if (!list?.length) return showEmptyFame();
     el.fame.replaceChildren(
       ...(list || []).map((m) => {
         const li = document.createElement("li");
@@ -591,7 +623,7 @@
       setVerdict(null);
       renderLive(MOBILE.matches ? null : data); // the phone strip sits above the composer; the sent message carries its own badge
       renderStats(data.stats);
-      if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame); }
+      if (transport === "poll") { addMessage(data.message, true); renderFame(data.fame, data.fame_reset); }
       scrollDown(true);
     } catch {
       setVerdict({ error: "Couldn't reach the server" });

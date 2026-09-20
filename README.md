@@ -20,7 +20,13 @@ server when you hit send. Mean messages never land — the Send button just wigg
   monospace) and see every probability Jev returned — for your live draft *and* for
   every message in the room.
 - **One massive room.** Server-Sent Events fan messages out to everyone connected,
-  with presence, a "nicest things said" leaderboard, and live Jev stats.
+  with presence, a "nicest things said" leaderboard that starts fresh every hour (with a
+  countdown), and live Jev stats.
+- **Regulars.** A few resident personas (`bots.js`) keep the room warm: about once a minute one
+  of them answers the latest message (Jev classifies its topic; the reply comes from a template
+  pool) or shares a small slice of their day. Their lines go through the same moderation as
+  everyone else's and never enter the leaderboard. The online count shows real people plus a
+  configurable floor (`ONLINE_FLOOR`, default 50); set `BOTS=0` / `ONLINE_FLOOR=0` to turn either off.
 - **Username + emoji.** Pick a name and an emoji to join. A cookie remembers you on
   that computer, so refreshing or coming back later drops you straight into the room.
 - **Live-only thread.** You only see what's said while you're connected; a refresh
@@ -73,7 +79,8 @@ Optional env vars (see [`.env.example`](.env.example)): `PORT`, `JEV_MODEL`, `DA
 `MAX_MESSAGES`, `HISTORY`, `MAX_TEXT` (default 280), `MAX_JEV_INFLIGHT`, `JEV_BUDGET_DAY` (room-wide Jev
 calls per UTC day, default 6250000 ≈ $500/day), `JEV_PREVIEW_SHARE` (share of the budget after which the
 as-you-type preview pauses while sends keep working, default 0.8), `TRUST_PROXY` (set to `0` when not behind a reverse proxy),
-`REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`.
+`REDIS_URL` (use a shared Redis instead of the JSON file), `TRANSPORT` (`sse` or `poll`), `POLL_MS`,
+`BOTS` (`0` disables the resident personas), `BOT_EVERY_MS` (default 60000), `ONLINE_FLOOR` (default 50).
 
 ```bash
 npm run check   # syntax-check every file

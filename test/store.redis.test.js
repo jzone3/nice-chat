@@ -46,7 +46,9 @@ function fakeRedis() {
   return new Promise((resolve) => server.listen(0, "127.0.0.1", () => resolve({ close, port: server.address().port, counters })));
 }
 
-test("redis store: limiter enforces every window and the jev budget", async () => {
+test("redis store: limiter enforces every window and the jev budget", async (t) => {
+  // Pin the clock so the 10s burst window can't roll over between calls (that made this flaky).
+  t.mock.timers.enable({ apis: ["Date"], now: 1_700_000_005_000 });
   const { close, port, counters } = await fakeRedis();
   process.env.REDIS_URL = `redis://127.0.0.1:${port}`;
   process.env.JEV_BUDGET_DAY = "2";
