@@ -18,7 +18,6 @@ const BOTS = [
   { name: "june", emoji: "🍓" },
   { name: "oliver", emoji: "🚲" },
 ];
-const BOT_NAMES = new Set(BOTS.map((b) => b.name));
 
 // {name} is the human being answered.
 const REPLIES = {
@@ -119,7 +118,7 @@ const LIFE = [
 ];
 
 const pick = (arr, rnd = Math.random) => arr[Math.floor(rnd() * arr.length)];
-const isBot = (m) => m?.bot === true || BOT_NAMES.has(m?.name);
+const isBot = (m) => m?.bot === true;
 
 /**
  * One scheduled step. `store` supplies claim/history/addMessage; `readRoom` and `judge` are the
@@ -144,12 +143,14 @@ async function tick({ store, readRoom, judge, now = Date.now() }) {
 
   const verdict = await judge(text, history.slice(-3).map((m) => `${m.name}: ${m.text}`), { force: true });
   if (!verdict.allowed) return null;
+  // Stamp at insert time: pollers' `since` cursors have moved on during the Jev calls above.
+  const ts = Date.now();
   return store.addMessage({
-    id: now.toString(36) + crypto.randomBytes(3).toString("hex"),
+    id: ts.toString(36) + crypto.randomBytes(3).toString("hex"),
     name: bot.name,
     emoji: bot.emoji,
     text,
-    ts: now,
+    ts,
     bot: true,
     niceness: verdict.niceness,
     tone: verdict.tone,

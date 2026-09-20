@@ -103,7 +103,7 @@ function clientIp(req) {
 // (store.allow("jev")) that is only charged when a request actually leaves for the API.
 let jevInflight = 0;
 const reserveJev = () => store.allow("jev", "room");
-async function gatedJudge(draft, context, opts = {}) {
+async function gated(call) {
   if (jevInflight >= MAX_JEV_INFLIGHT) {
     const err = new Error("busy");
     err.busy = true;
@@ -111,28 +111,34 @@ async function gatedJudge(draft, context, opts = {}) {
   }
   jevInflight++;
   try {
-    const verdict = await judge(draft, context, { ...opts, reserve: reserveJev });
-    if (!verdict.cached && !verdict.skipped && !verdict.local) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
-    return verdict;
+    return await call();
   } finally {
     jevInflight--;
   }
 }
 
+async function gatedJudge(draft, context, opts = {}) {
+  return gated(async () => {
+    const verdict = await judge(draft, context, { ...opts, reserve: reserveJev });
+    if (!verdict.cached && !verdict.skipped && !verdict.local) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
+    return verdict;
+  });
+}
+
 async function gatedJudgeName(name) {
-  if (jevInflight >= MAX_JEV_INFLIGHT) {
-    const err = new Error("busy");
-    err.busy = true;
-    throw err;
-  }
-  jevInflight++;
-  try {
+  return gated(async () => {
     const verdict = await judgeName(name, { reserve: reserveJev });
     if (!verdict.cached) await store.bumpStats({ blocked: !verdict.allowed, latency_ms: verdict.latency_ms });
     return verdict;
-  } finally {
-    jevInflight--;
-  }
+  });
+}
+
+async function gatedReadRoom(msg) {
+  return gated(async () => {
+    const read = await readRoom(msg, { reserve: reserveJev });
+    await store.bumpStats({ blocked: false, latency_ms: read.latency_ms });
+    return read;
+  });
 }
 
 async function stats() {
@@ -164,11 +170,18 @@ async function roomState(messages, viewer, since) {
 async function botTick() {
   if (!BOTS_ON) return null;
   try {
-    return await bots.tick({ store, readRoom: (m) => readRoom(m, { reserve: reserveJev }), judge: gatedJudge });
+    return await bots.tick({ store, readRoom: gatedReadRoom, judge: gatedJudge });
   } catch (e) {
     if (!e.busy && !e.cooldown) console.error("[bots]", e.message);
     return null;
   }
+}
+
+// The poll that wins the claim carries the bot's Jev calls; never let them hold up its reply for long.
+// (The tick keeps running; the line is stamped when it lands, so later polls still pick it up.)
+const BOT_TICK_WAIT_MS = 6_000;
+function botTickWithin(ms = BOT_TICK_WAIT_MS) {
+  return Promise.race([botTick(), new Promise((r) => setTimeout(r, ms, null).unref?.())]);
 }
 
 function publicUser(u) {
@@ -203,10 +216,13 @@ const logFail = (what) => (e) => console.error(`[${what}]`, e.message);
 let botTimer = null;
 function scheduleBots() {
   if (TRANSPORT !== "sse" || !BOTS_ON || botTimer) return;
-  botTimer = setInterval(async () => {
+  botTimer = setInterval(() => {
     if (!clients.size) return;
-    const msg = await botTick();
-    if (msg) broadcast("message", { message: msg, fame: await store.hallOfFame(), fame_reset: store.fameResetsAt() });
+    botTick()
+      .then(async (msg) => {
+        if (msg) broadcast("message", { message: msg, fame: await store.hallOfFame(), fame_reset: store.fameResetsAt() });
+      })
+      .catch(logFail("bots"));
   }, 15_000).unref();
 }
 
@@ -286,7 +302,7 @@ async function handle(req, res) {
     if (req.method === "GET" && url.pathname === "/api/poll") {
       const since = Number(url.searchParams.get("since")) || 0;
       if (user) await store.heartbeat(uid);
-      if (user && TRANSPORT === "poll") await botTick();
+      if (user && TRANSPORT === "poll") await botTickWithin();
       let messages = since ? await store.since(since) : await store.history();
       let full = !since;
       if (!full && messages.length >= store.HISTORY) {

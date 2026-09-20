@@ -404,7 +404,7 @@
     if (!fameResetAt) return;
     const left = fameResetAt - (Date.now() + clockSkew);
     if (left <= 0) {
-      if (el.fame.childElementCount) el.fame.replaceChildren();
+      if (!el.fame.querySelector(".fame-empty")) showEmptyFame();
       el.fameReset.textContent = "new hour, new board!";
       return;
     }
@@ -414,19 +414,19 @@
   }
   setInterval(tickFameClock, 1000);
 
+  function showEmptyFame() {
+    const li = document.createElement("li");
+    li.className = "fame-empty";
+    li.textContent = "fresh board — say something lovely to claim the top spot";
+    el.fame.replaceChildren(li);
+  }
+
   function renderFame(list, resetAt) {
     if (resetAt) {
       fameResetAt = resetAt;
       tickFameClock();
     }
-    if (!list?.length) {
-      el.fame.replaceChildren();
-      const li = document.createElement("li");
-      li.className = "fame-empty";
-      li.textContent = "fresh board — say something lovely to claim the top spot";
-      el.fame.append(li);
-      return;
-    }
+    if (!list?.length) return showEmptyFame();
     el.fame.replaceChildren(
       ...(list || []).map((m) => {
         const li = document.createElement("li");

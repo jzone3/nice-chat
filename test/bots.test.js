@@ -48,7 +48,8 @@ test("bots: answers a fresh human message using the Jev topic, addressing them b
     assert.ok(msg.bot);
     assert.ok(bots.BOTS.some((b) => b.name === msg.name && b.emoji === msg.emoji));
     assert.ok(bots.REPLIES.food.map((t) => t.replaceAll("{name}", "Ann")).includes(msg.text), msg.text);
-    assert.equal(msg.ts, now);
+    assert.ok(msg.ts >= Date.now() - 5_000, "stamped at insert time, not when the tick started");
+    assert.equal(msg.id.slice(0, msg.ts.toString(36).length), msg.ts.toString(36));
     assert.equal(msg.niceness, 4.5);
     assert.deepEqual(store.added, [msg]);
   } finally {
@@ -66,7 +67,7 @@ test("bots: talks about their day when the last human line is stale or already a
     const store = fakeStore(history);
     const msg = await bots.tick({ store, now, readRoom: () => assert.fail("no jev read needed"), judge: async () => ok });
     assert.ok(bots.LIFE.includes(msg.text), msg.text);
-    assert.notEqual(msg.name, "maya");
+    if (history.some((m) => m.bot)) assert.notEqual(msg.name, "maya", "never the same regular twice in a row");
   }
 });
 
