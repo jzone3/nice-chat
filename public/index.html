@@ -12,7 +12,7 @@
   <link rel="icon" href="favicon.svg" type="image/svg+xml" />
   <link rel="preconnect" href="https://fonts.googleapis.com" />
   <link href="https://fonts.googleapis.com/css2?family=Comic+Neue:ital,wght@0,400;0,700;1,400&display=swap" rel="stylesheet" />
-  <link rel="stylesheet" href="style.css?v=26" />
+  <link rel="stylesheet" href="style.css?v=27" />
 </head>
 <body>
   <div class="blobs" aria-hidden="true"><span class="b1"></span><span class="b2"></span><span class="b3"></span><span class="b4"></span></div>
@@ -69,16 +69,16 @@
         <span>🏆 Hall of fame &amp; Jev stats</span>
         <button type="button" class="rail-close" id="rail-close" aria-label="Close">✕</button>
       </div>
+      <section class="card fame">
+        <h2>🏆 Nicest things said</h2>
+        <ol id="fame"></ol>
+      </section>
+
       <section class="card live empty" id="live">
         <h2>🔬 Live Jev read</h2>
         <p class="hint" id="live-hint">Start typing and Jev scores your draft as you go.</p>
         <div class="probs" id="live-probs"></div>
         <div class="live-meta" id="live-meta"></div>
-      </section>
-
-      <section class="card fame">
-        <h2>🏆 Nicest things said</h2>
-        <ol id="fame"></ol>
       </section>
 
       <section class="card stats">
@@ -145,6 +145,6 @@
   </div>
 
   <div class="toast" id="toast"></div>
-  <script src="app.js?v=26"></script>
+  <script src="app.js?v=27"></script>
 </body>
 </html>
