@@ -609,7 +609,7 @@
   // instead of resizing it; --vvt follows that pan).
   function placeLive() {
     if (MOBILE.matches) el.chat.insertBefore(el.live, el.composer);
-    else el.rail.insertBefore(el.live, el.rail.querySelector(".fame"));
+    else el.rail.insertBefore(el.live, el.rail.querySelector(".stats"));
   }
   function openRail(on) {
     el.rail.classList.toggle("open", on);
