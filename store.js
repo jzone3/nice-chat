@@ -13,6 +13,11 @@ const REDIS_URL = process.env.REDIS_URL || process.env.KV_URL || "";
 const PREFIX = process.env.REDIS_PREFIX || "nc:";
 const PRESENCE_TTL_MS = 45_000; // a poller/stream that hasn't checked in for this long is offline
 const FAME_KEEP = 25;
+// The leaderboard is per fixed clock hour (UTC-aligned, so every client sees the same reset) and starts fresh each hour.
+const HOUR = 60 * 60 * 1000;
+const FAME_WINDOW_MS = Number(process.env.FAME_WINDOW_MS) || HOUR;
+const fameBucket = (ts = Date.now()) => Math.floor(ts / FAME_WINDOW_MS);
+const fameResetsAt = (ts = Date.now()) => (fameBucket(ts) + 1) * FAME_WINDOW_MS;
 const REACTIONS = ["❤️", "😂"];
 const REACTION_TTL_S = 60 * 60 * 24 * 30;
 
@@ -71,6 +76,7 @@ function memoryStore() {
   const seen = new Map(); // uid -> last heartbeat
   const reactedAt = new Map(); // message id -> last reaction change ms
   const hits = new Map(); // limiter key -> { n, reset }
+  const claims = new Map(); // claim key -> expiry ms
   let saveTimer = null;
   const stats = { requests: 0, blocked: 0, total_latency_ms: 0 };
 
@@ -182,7 +188,14 @@ function memoryStore() {
       return state.messages.slice(-n).map((m) => `${m.name}: ${m.text}`);
     },
     async hallOfFame(n = 5) {
-      return state.messages.filter((m) => m.niceness != null).sort(fameSort).slice(0, n);
+      const bucket = fameBucket();
+      return state.messages.filter((m) => m.niceness != null && !m.bot && fameBucket(m.ts) === bucket).sort(fameSort).slice(0, n);
+    },
+    async claim(key, ms) {
+      const now = Date.now();
+      if ((claims.get(key) || 0) > now) return false;
+      claims.set(key, now + ms);
+      return true;
     },
     async messageCount() {
       return state.messages.length;
@@ -230,7 +243,7 @@ function redisStore(url) {
   const K = {
     user: (uid) => `${PREFIX}user:${uid}`,
     messages: `${PREFIX}messages`, // list of JSON, oldest first
-    fame: `${PREFIX}fame`, // zset score=niceness member=JSON
+    fame: (bucket) => `${PREFIX}fame:${bucket}`, // per-hour zset score=niceness member=JSON
     presence: `${PREFIX}presence`, // zset score=last heartbeat ms member=uid
     stats: `${PREFIX}stats`, // hash
     rx: (id) => `${PREFIX}rx:${id}`, // hash emoji -> count
@@ -312,9 +325,11 @@ function redisStore(url) {
         ["RPUSH", K.messages, s],
         ["LTRIM", K.messages, String(-MAX_MESSAGES), "-1"],
       ];
-      if (msg.niceness != null) {
-        cmds.push(["ZADD", K.fame, String(msg.niceness + msg.ts / 1e16), s]);
-        cmds.push(["ZREMRANGEBYRANK", K.fame, "0", String(-FAME_KEEP - 1)]);
+      if (msg.niceness != null && !msg.bot) {
+        const key = K.fame(fameBucket(msg.ts));
+        cmds.push(["ZADD", key, String(msg.niceness + msg.ts / 1e16), s]);
+        cmds.push(["ZREMRANGEBYRANK", key, "0", String(-FAME_KEEP - 1)]);
+        cmds.push(["PEXPIRE", key, String(FAME_WINDOW_MS * 2)]);
       }
       await write(cmds);
       return msg;
@@ -344,7 +359,11 @@ function redisStore(url) {
       return parseAll(await r.exec(["LRANGE", K.messages, String(-n), "-1"])).map((m) => `${m.name}: ${m.text}`);
     },
     async hallOfFame(n = 5) {
-      return parseAll(await r.exec(["ZREVRANGE", K.fame, "0", String(n - 1)])).sort(fameSort);
+      return parseAll(await r.exec(["ZREVRANGE", K.fame(fameBucket()), "0", String(n - 1)])).sort(fameSort);
+    },
+    // Room-wide mutex with a TTL: exactly one instance wins each window (SET NX PX).
+    async claim(key, ms) {
+      return (await r.exec(["SET", `${PREFIX}claim:${key}`, "1", "PX", String(ms), "NX"])) === "OK";
     },
     async messageCount() {
       return Number(await r.exec(["LLEN", K.messages]));
@@ -393,3 +412,4 @@ function redisStore(url) {
 module.exports = REDIS_URL ? redisStore(REDIS_URL) : memoryStore();
 module.exports.HISTORY = HISTORY;
 module.exports.REACTIONS = REACTIONS;
+module.exports.fameResetsAt = fameResetsAt;

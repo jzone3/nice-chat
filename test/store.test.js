@@ -11,8 +11,10 @@ const store = require("../store");
 
 const uid = "00000000-0000-4000-8000-000000000001";
 const msg = (i, niceness) => ({ id: `m${i}`, name: "Ann", emoji: "🐸", text: `hello ${i}`, ts: 1000 + i, niceness, tone: "warm" });
+const HOUR = 3_600_000;
 
-test("memory store: users, history, since, fame, presence", async () => {
+test("memory store: users, history, since, fame, presence", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 1000 }); // same clock hour as the fixture timestamps
   assert.equal(await store.getUser(uid), null);
   const u = await store.upsertUser(uid, { name: "Ann", emoji: "🐸" });
   assert.equal(u.name, "Ann");
@@ -27,6 +29,30 @@ test("memory store: users, history, since, fame, presence", async () => {
   assert.deepEqual(await store.presence(), { online: 1, people: [{ name: "Ann", emoji: "🐸" }] });
   await store.leave(uid);
   assert.equal((await store.presence()).online, 0);
+});
+
+test("memory store: leaderboard is per clock hour and skips bot lines", async (t) => {
+  const top = 10 * HOUR + 5 * 60_000; // 10:05
+  t.mock.timers.enable({ apis: ["Date"], now: top });
+  assert.equal(store.fameResetsAt(), 11 * HOUR);
+  await store.addMessage({ ...msg(10, 4.9), ts: top - 10 * 60_000 }); // 09:55 → last hour
+  await store.addMessage({ ...msg(11, 4.2), ts: top - 60_000 });
+  await store.addMessage({ ...msg(12, 5.0), ts: top - 30_000, bot: true, name: "maya" });
+  await store.addMessage({ ...msg(13, 4.6), ts: top });
+  assert.deepEqual((await store.hallOfFame()).map((m) => m.id), ["m13", "m11"]);
+  t.mock.timers.tick(55 * 60_000); // 11:00
+  assert.deepEqual(await store.hallOfFame(), []);
+  assert.equal(store.fameResetsAt(), 12 * HOUR);
+});
+
+test("memory store: claim is a TTL mutex", async (t) => {
+  t.mock.timers.enable({ apis: ["Date"], now: 5_000_000 });
+  assert.equal(await store.claim("bots", 60_000), true);
+  assert.equal(await store.claim("bots", 60_000), false);
+  t.mock.timers.tick(59_000);
+  assert.equal(await store.claim("bots", 60_000), false);
+  t.mock.timers.tick(1_000);
+  assert.equal(await store.claim("bots", 60_000), true);
 });
 
 test("memory store: reactions toggle per user, counts shared, `me` per viewer", async () => {

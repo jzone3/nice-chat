@@ -3,8 +3,9 @@
 const fs = require("fs");
 const path = require("path");
 const crypto = require("crypto");
-const { judge, judgeName, MODEL } = require("./jev");
+const { judge, judgeName, readRoom, MODEL } = require("./jev");
 const store = require("./store");
+const bots = require("./bots");
 
 const PUBLIC = path.join(__dirname, "public");
 const MIME = {
@@ -26,6 +27,9 @@ const TRUST_PROXY = process.env.TRUST_PROXY !== "0";
 // "sse": one process pushes to every open stream. "poll": stateless instances, browsers poll /api/poll.
 const TRANSPORT = process.env.TRANSPORT || (process.env.VERCEL ? "poll" : "sse");
 const POLL_MS = Number(process.env.POLL_MS) || 2500;
+// The online count shown is real people plus this floor (and the bots), drifting a little so it isn't flat.
+const ONLINE_FLOOR = Math.max(0, Number(process.env.ONLINE_FLOOR ?? 50));
+const BOTS_ON = process.env.BOTS !== "0";
 
 // ------------------------------------------------------------------ helpers
 function readJson(req) {
@@ -135,6 +139,38 @@ async function stats() {
   return { ...(await store.stats()), budget: await store.jevBudget(), model: MODEL };
 }
 
+// Slow wobble (period ~11 min, +1..+9) layered on the floor so the number breathes like a real crowd.
+function crowd(now = Date.now()) {
+  if (!ONLINE_FLOOR) return 0;
+  const t = now / (11 * 60_000) * 2 * Math.PI;
+  return ONLINE_FLOOR + 5 + Math.round(3 * Math.sin(t) + Math.sin(t * 2.7));
+}
+
+function dressPresence(p, now = Date.now()) {
+  const extra = crowd(now);
+  if (!extra && !BOTS_ON) return p;
+  const people = p.people.slice();
+  if (BOTS_ON) for (const b of bots.BOTS) if (!people.some((x) => x.name === b.name)) people.push({ name: b.name, emoji: b.emoji });
+  return { online: p.online + extra + (BOTS_ON ? bots.BOTS.length : 0), people };
+}
+
+async function roomState(messages, viewer, since) {
+  const [fame, presence, s] = await Promise.all([store.hallOfFame(), store.presence(), stats()]);
+  const reactions = since ? await store.reactionsSince(since, viewer) : await store.reactions(messages.map((m) => m.id), viewer);
+  return { now: Date.now(), messages, fame, fame_reset: store.fameResetsAt(), presence: dressPresence(presence), stats: s, reactions };
+}
+
+// One bot line per BOT_EVERY_MS across every instance; a poll that lands after the window wins the claim.
+async function botTick() {
+  if (!BOTS_ON) return null;
+  try {
+    return await bots.tick({ store, readRoom: (m) => readRoom(m, { reserve: reserveJev }), judge: gatedJudge });
+  } catch (e) {
+    if (!e.busy && !e.cooldown) console.error("[bots]", e.message);
+    return null;
+  }
+}
+
 function publicUser(u) {
   return u ? { name: u.name, emoji: u.emoji } : null;
 }
@@ -164,12 +200,22 @@ function broadcast(event, data) {
 // Background store calls (timers, close handlers) run outside any request's try/catch.
 const logFail = (what) => (e) => console.error(`[${what}]`, e.message);
 
+let botTimer = null;
+function scheduleBots() {
+  if (TRANSPORT !== "sse" || !BOTS_ON || botTimer) return;
+  botTimer = setInterval(async () => {
+    if (!clients.size) return;
+    const msg = await botTick();
+    if (msg) broadcast("message", { message: msg, fame: await store.hallOfFame(), fame_reset: store.fameResetsAt() });
+  }, 15_000).unref();
+}
+
 let presenceTimer = null;
 function schedulePresence() {
   if (TRANSPORT !== "sse" || presenceTimer) return;
   presenceTimer = setTimeout(() => {
     presenceTimer = null;
-    store.presence().then((p) => broadcast("presence", p), logFail("presence"));
+    store.presence().then((p) => broadcast("presence", dressPresence(p)), logFail("presence"));
   }, 300);
 }
 
@@ -240,15 +286,14 @@ async function handle(req, res) {
     if (req.method === "GET" && url.pathname === "/api/poll") {
       const since = Number(url.searchParams.get("since")) || 0;
       if (user) await store.heartbeat(uid);
-      let [messages, fame, presence, s] = await Promise.all([since ? store.since(since) : store.history(), store.hallOfFame(), store.presence(), stats()]);
+      if (user && TRANSPORT === "poll") await botTick();
+      let messages = since ? await store.since(since) : await store.history();
       let full = !since;
       if (!full && messages.length >= store.HISTORY) {
         messages = await store.history();
         full = true;
       }
-      const viewer = user ? uid : null;
-      const reactions = full ? await store.reactions(messages.map((m) => m.id), viewer) : await store.reactionsSince(since, viewer);
-      return send(res, 200, { now: Date.now(), full, messages, fame, presence, stats: s, reactions });
+      return send(res, 200, { full, ...(await roomState(messages, user ? uid : null, full ? 0 : since)) });
     }
 
     if (req.method === "GET" && url.pathname === "/api/stream") {
@@ -262,11 +307,10 @@ async function handle(req, res) {
       const client = { res, uid: user ? uid : null };
       clients.add(client);
       if (user) await store.heartbeat(uid);
-      const [messages, fame, presence, s] = await Promise.all([store.history(), store.hallOfFame(), store.presence(), stats()]);
-      const reactions = await store.reactions(messages.map((m) => m.id), user ? uid : null);
       res.write(`retry: 3000\n`);
-      res.write(`event: history\ndata: ${JSON.stringify({ now: Date.now(), messages, fame, presence, stats: s, reactions })}\n\n`);
+      res.write(`event: history\ndata: ${JSON.stringify(await roomState(await store.history(), user ? uid : null))}\n\n`);
       schedulePresence();
+      scheduleBots();
       req.on("close", () => {
         clients.delete(client);
         if (client.uid && ![...clients].some((c) => c.uid === client.uid)) store.leave(client.uid).catch(logFail("leave"));
@@ -313,8 +357,9 @@ async function handle(req, res) {
         scores: { flags: verdict.flags, tone_probs: verdict.tone_probs, niceness_probs: verdict.niceness_probs, latency_ms: verdict.latency_ms },
       });
       const fame = await store.hallOfFame();
-      if (TRANSPORT === "sse") broadcast("message", { message: msg, fame });
-      return send(res, 200, { ok: true, ...verdict, message: msg, fame, stats: await stats() });
+      const fame_reset = store.fameResetsAt();
+      if (TRANSPORT === "sse") broadcast("message", { message: msg, fame, fame_reset });
+      return send(res, 200, { ok: true, ...verdict, message: msg, fame, fame_reset, stats: await stats() });
     }
 
     if (req.method === "POST" && url.pathname === "/api/react") {
@@ -334,7 +379,7 @@ async function handle(req, res) {
 
     if (req.method === "GET" && url.pathname === "/api/stats") {
       const [s, presence, messages] = await Promise.all([stats(), store.presence(), store.messageCount()]);
-      return send(res, 200, { ...s, presence, messages });
+      return send(res, 200, { ...s, presence: dressPresence(presence), messages });
     }
 
     res.writeHead(404, { "Content-Type": "text/plain" });
