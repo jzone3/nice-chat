@@ -22,6 +22,8 @@ const BLOCK = [
   // not mean, but not nice: complaining, venting, gloom
   "I'm feeling crappy today", "I feel crappy", "This sucks", "ugh what a waste of time", "everything is terrible", "so bored", "I hate Mondays",
   "worst day ever", "meh", "not great", "this chat is boring",
+  // sad news with no upside is downbeat too
+  "my cat died today", "my cat died today :(", "my dog passed away", "I lost my grandma this week",
 ];
 
 const ALLOW = [
@@ -35,6 +37,7 @@ const ALLOW = [
   // plain neutral talk and sad-but-warm messages are fine; only downbeat grumbling is not
   "what time is it", "I'm from Ohio", "the demo starts at 3", "can someone help me with my homework?", "brb", "ok", "hmm interesting",
   "does anyone know a good book?", "rough day, but this room cheers me up", "I'm so tired but happy to be here",
+  "my cat died today but I'm grateful for the years we had",
 ];
 
 // laughter is good here, even right after someone's mishap (Jev alone reads that as mocking)

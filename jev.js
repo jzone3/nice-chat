@@ -48,9 +48,9 @@ const QUESTIONS = {
   },
   is_negative: {
     type: "noul",
-    instructions: "Is `draft_message` negative in spirit — complaining, venting, gloom, disgust, boredom or declaring that something is bad, sucks or is a waste — even when nobody is attacked?",
+    instructions: "Is `draft_message` negative in spirit — complaining, venting, gloom, sad news, grief, disgust, boredom or declaring that something is bad, sucks or is a waste — even when nobody is attacked?",
     criteria: {
-      true: "Downbeat or grumbling: 'this sucks', 'I feel crappy today', 'ugh, what a waste of time', 'everything is terrible', 'so bored', 'I hate Mondays', 'worst day ever'",
+      true: "Downbeat, grumbling or sad with no upside: 'this sucks', 'I feel crappy today', 'ugh, what a waste of time', 'everything is terrible', 'so bored', 'I hate Mondays', 'worst day ever', 'my cat died today', 'my dog passed away', 'I lost my grandma this week'",
       false: "Upbeat, appreciative or plainly neutral: greetings, questions, facts, logistics, jokes, 'what time is it', 'I'm from Ohio', 'the demo starts at 3'; also a sad fact shared with warmth or hope ('rough day, but this room cheers me up')",
     },
   },
@@ -198,7 +198,7 @@ const THRESHOLDS = {
   has_link: 0.5,
   is_sarcastic_or_backhanded: 0.6,
   is_passive_aggressive: 0.65,
-  is_negative: 0.7, // complaining/venting is not mean, but it is not nice either
+  is_negative: 0.6, // complaining/venting/sad news is not mean, but it is not nice either
   hostile_tone_min_prob: 0.55, // tone == hostile with at least this probability
   cold_tone_min_prob: 0.75, // very confidently cold also blocks
   niceness_min: 2.5, // score below this blocks even if no flag fired
