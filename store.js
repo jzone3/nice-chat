@@ -188,7 +188,7 @@ function memoryStore() {
     },
     async hallOfFame(n = 5) {
       const bucket = fameBucket();
-      return state.messages.filter((m) => m.niceness != null && fameBucket(m.ts) === bucket).sort(fameSort).slice(0, n);
+      return state.messages.filter((m) => m.niceness != null && !m.bot && fameBucket(m.ts) === bucket).sort(fameSort).slice(0, n);
     },
     async messageCount() {
       return state.messages.length;
