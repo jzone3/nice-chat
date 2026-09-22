@@ -489,55 +489,6 @@ async function judge(draft, context = [], { force = false, reserve } = {}) {
   return result;
 }
 
-// One snap read of the latest human message so the room bots can pick a fitting reply template.
-// Code owns the reply text; Jev only says what the message is about.
-const ROOM_QUESTIONS = {
-  topic: {
-    type: "choice",
-    instructions: "What is `last_message.text` mostly about?",
-    criteria: {
-      greeting: "Saying hi, joining, good morning/night, introducing themselves",
-      question: "Asking the room something and waiting for an answer",
-      food: "Food, drinks, coffee, cooking, snacks",
-      animals: "Pets or animals",
-      weather_outdoors: "Weather, nature, walks, the outdoors",
-      work_school: "Work, school, studying, coding, projects",
-      media: "Music, movies, shows, books, games",
-      compliment: "Complimenting or thanking the room or someone in it",
-      joke: "A joke, laughter or playful silliness",
-      other: "Anything else",
-    },
-  },
-  is_about_this_chat: {
-    type: "noul",
-    instructions: "Is `last_message.text` talking about this chat room itself (the app, Jev, the moderation, the niceness rule)?",
-  },
-};
-
-async function readRoom(lastMessage, { reserve } = {}) {
-  const state = { last_message: { author: lastMessage.name, text: lastMessage.text } };
-  const t0 = performance.now();
-  let data;
-  try {
-    data = await callJev({ state, model: MODEL, questions: ROOM_QUESTIONS }, reserve);
-  } catch (e) {
-    stats.errors++;
-    throw e;
-  }
-  const latency_ms = Math.round(performance.now() - t0);
-  stats.requests++;
-  stats.total_latency_ms += latency_ms;
-  stats.input_tokens += data.usage?.input_tokens ?? 0;
-  stats.output_tokens += data.usage?.output_tokens ?? 0;
-  const topic = data.answers.topic?.choice ?? "other";
-  return {
-    topic: ROOM_QUESTIONS.topic.criteria[topic] ? topic : "other",
-    topic_prob: data.answers.topic?.probabilities?.[topic] ?? 0,
-    about_chat: data.answers.is_about_this_chat?.noul ?? 0,
-    latency_ms,
-  };
-}
-
 /** Judge a display name on its own. Same budget hook as `judge`; results are cached per name. */
 async function judgeName(name, { reserve } = {}) {
   const username = name.trim();
@@ -561,4 +512,4 @@ async function judgeName(name, { reserve } = {}) {
   return result;
 }
 
-module.exports = { QUESTIONS, NAME_QUESTIONS, ROOM_QUESTIONS, THRESHOLDS, MODEL, decide, decideName, judge, judgeName, readRoom, looksLikeLink, getStats };
+module.exports = { QUESTIONS, NAME_QUESTIONS, THRESHOLDS, MODEL, decide, decideName, judge, judgeName, looksLikeLink, getStats };
