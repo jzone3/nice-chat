@@ -26,8 +26,8 @@ const REACTION_TTL_S = 60 * 60 * 24 * 30;
 // `jev` is keyed by a single constant and caps the room's total upstream Jev calls.
 const MIN = 60_000;
 const DAY = 24 * 60 * MIN; // fixed UTC-day buckets
-// 6.25M calls ≈ $500/day at Jev's $0.042 per million input tokens (~1,900 tokens per message check).
-const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 6_250_000;
+// 12,500 calls ≈ $1/day at Jev's $0.042 per million input tokens (~1,900 tokens per message check).
+const JEV_BUDGET_DAY = Number(process.env.JEV_BUDGET_DAY) || 12_500;
 // Past this share of the day's budget the as-you-type preview pauses so real sends keep flowing.
 const JEV_PREVIEW_SHARE = Math.min(1, Math.max(0, Number(process.env.JEV_PREVIEW_SHARE) || 0.8));
 const LIMITS = {
@@ -76,7 +76,6 @@ function memoryStore() {
   const seen = new Map(); // uid -> last heartbeat
   const reactedAt = new Map(); // message id -> last reaction change ms
   const hits = new Map(); // limiter key -> { n, reset }
-  const claims = new Map(); // claim key -> expiry ms
   let saveTimer = null;
   const stats = { requests: 0, blocked: 0, total_latency_ms: 0 };
 
@@ -189,13 +188,7 @@ function memoryStore() {
     },
     async hallOfFame(n = 5) {
       const bucket = fameBucket();
-      return state.messages.filter((m) => m.niceness != null && !m.bot && fameBucket(m.ts) === bucket).sort(fameSort).slice(0, n);
-    },
-    async claim(key, ms) {
-      const now = Date.now();
-      if ((claims.get(key) || 0) > now) return false;
-      claims.set(key, now + ms);
-      return true;
+      return state.messages.filter((m) => m.niceness != null && fameBucket(m.ts) === bucket).sort(fameSort).slice(0, n);
     },
     async messageCount() {
       return state.messages.length;
@@ -325,7 +318,7 @@ function redisStore(url) {
         ["RPUSH", K.messages, s],
         ["LTRIM", K.messages, String(-MAX_MESSAGES), "-1"],
       ];
-      if (msg.niceness != null && !msg.bot) {
+      if (msg.niceness != null) {
         const key = K.fame(fameBucket(msg.ts));
         cmds.push(["ZADD", key, String(msg.niceness + msg.ts / 1e16), s]);
         cmds.push(["ZREMRANGEBYRANK", key, "0", String(-FAME_KEEP - 1)]);
@@ -360,10 +353,6 @@ function redisStore(url) {
     },
     async hallOfFame(n = 5) {
       return parseAll(await r.exec(["ZREVRANGE", K.fame(fameBucket()), "0", String(n - 1)])).sort(fameSort);
-    },
-    // Room-wide mutex with a TTL: exactly one instance wins each window (SET NX PX).
-    async claim(key, ms) {
-      return (await r.exec(["SET", `${PREFIX}claim:${key}`, "1", "PX", String(ms), "NX"])) === "OK";
     },
     async messageCount() {
       return Number(await r.exec(["LLEN", K.messages]));
